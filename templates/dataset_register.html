@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}CCH{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>Data Curation</h1>
+    <h2>{% if file_name %}{{ file_name }}{% else %}{% endif %}</h2>
+</div>
+{{ wtf.quick_form(form) }}
+{% endblock %}
