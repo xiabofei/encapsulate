@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}CCH{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>特征选择</h1>
+</div>
+{{ wtf.quick_form(form) }}
+    {% if head_sample %}
+        <div class="page-header">
+            <h1>特征得分</h1>
+            <table class='table table-striped'> 
+                <thead>
+                    <tr>
+                        <th>特征名称</th>
+                        <th>特征得分</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in selected_feature %}
+                        {% if l|length == 2 %}
+                        <tr>
+                            <td>{{ l['feature_name'] }}</td>
+                            <td>{{ l['feature_scores'] }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+    {% if selected_feature %}
+        <div class="page-header">
+            <h1>特征选择后数据样本</h1>
+        </div>
+        <table class='table table-striped'> 
+        {{ head_sample|safe }}
+        </table>
+    {% endif %}
+{% endblock %}

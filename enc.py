@@ -23,7 +23,7 @@ base_dir = '/Users/xiabofei/Documents/cchdir/notebook/data'
 tmp_dir = '/Users/xiabofei/Documents/cchdir/encapsulate/data/'
 # 表单处理
 from flask_wtf import Form
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField, SelectField
 from wtforms.validators import DataRequired
 # boostrap样式
 from flask_bootstrap import Bootstrap
@@ -33,6 +33,9 @@ from flask import render_template
 from flask_moment import Moment
 # ipdb
 from ipdb import set_trace as st
+# json
+import json
+from pandas.io.json import json_normalize
 
 
 # 起一个app
@@ -40,10 +43,6 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
 bootstrap = Bootstrap(app)
 moment = Moment(app)
-
-class RegForm(Form):
-    file_name = StringField(u'csv文件名称', validators=[DataRequired()]) 
-    submit = SubmitField('Submit')
 
 @app.route('/')
 def index():
@@ -57,6 +56,10 @@ def page_not_found(e):
 def internal_server_error(e):
     return render_template('500.html'), 500
 
+# 数据获取
+class RegForm(Form):
+    file_name = StringField(u'csv文件名称', default=u'SynPUFs.curated_1.csv', validators=[DataRequired()]) 
+    submit = SubmitField('Submit')
 @app.route('/dataset-register', methods=['GET', 'POST'])
 def dataset_register():
     """
@@ -83,21 +86,59 @@ def dataset_register():
             session['pd_dataFrame'] = ['df_SynPUFs', 'data_x_raw', 'data_y']
             paras['pd_shape'] = [df_SynPUFs.shape, data_x_raw.shape, data_y.shape]
             paras['curated_data'] = session['pd_dataFrame']
-            # raise KeyError("Test an error message")
             return render_template('dataset_register.html', **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)
     return render_template('dataset_register.html', **paras)
 
+# 特征选择
+class FeaSelForm(Form):
+    strategy = SelectField(u'特征选择策略', choices=[("filter_method","filter_method")]) 
+    feature_selection_method = SelectField(u'特征选择方法', choices=[('information_gain','information_gain')])
+    data_X = StringField(u'样本数据', default='data_x_raw', validators=[DataRequired()]) 
+    data_Y = StringField(u'样本标签', default='data_y', validators=[DataRequired()])
+    selection_parameter = SelectField(u'选择指标度量', choices=[("k","k"), ("percentile","percentile"), ("threshold","threshold")])
+    selection_parameter_value = StringField(u'最大选择特征数', default='20', validators=[DataRequired()])
+    submit = SubmitField('Submit')
+@app.route('/feature-selection', methods=['GET', 'POST'])
+def feature_selection():
+    """
+    特征选择
+    """
+    paras = {}
+    form = FeaSelForm()
+    paras['form'] = form
+    if request.method=='POST' and form.validate():
+        try:
+            # 模拟从数据库获取数据
+            data_x_raw = pd.read_pickle(tmp_dir+form.data_X.data)
+            data_y = pd.read_pickle(tmp_dir+form.data_Y.data)
+            # 选择相关度最高的k个feature
+            info_gain_index, info_gain_feature = ix.feature_selection(
+                    str(form.strategy.data),
+                    str(form.feature_selection_method.data),
+                    data_x_raw,
+                    data_y,
+                    str(form.selection_parameter.data),
+                    int(form.selection_parameter_value.data))
+            slct_cols = data_x_raw.columns[info_gain_index]
+            # 模拟向数据库写入selected的数据
+            data_x = data_x_raw[slct_cols]
+            data_x.to_pickle(tmp_dir+'data_x') 
+            # head_sample = data_x.head().to_json(force_ascii=False)
+            head_sample = data_x.head(n=20).to_html(classes='table table-striped')
+            paras['head_sample'] = head_sample
+            paras['selected_feature'] = info_gain_feature
+            print type(info_gain_feature)
+            return render_template('feature_selection.html', **paras)
+        except Exception,e:
+            return render_template('error.html', e_message=e)
+    return render_template('feature_selection.html', **paras)
+
 def similarity(paras):
     """
     The SynPUFs-Similarity Process
     """
-    data_curation(paras['file_name'])
-    for k in session['pd_dataFrame']: globals()[k] = pd.read_pickle(tmp_dir+k)
-    info_gain_index, info_gain_feature = ix.feature_selection('filter_method', 'information_gain', data_x_raw, data_y, 'k', 20)
-    slct_cols = data_x_raw.columns[info_gain_index]
-    data_x = data_x_raw[slct_cols]
     tf = ix.transform_data_with_learning_metric(metric='PCA', data_X=data_x, data_Y=data_y, params={'n_components':12})
     labels = ix.execute_clustering(data_X=tf,
             algorithm='KMeans',
@@ -124,7 +165,6 @@ def similarity(paras):
         ret.append(u'患者群'+str(k))
         for path in v:
             ret.append(str(path))
-    # return map(lambda r:"<p>"+str(r)+"</p>", ret)
     return ret
 
 if __name__ == '__main__':
