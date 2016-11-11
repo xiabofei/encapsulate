@@ -24,7 +24,7 @@ tmp_dir = '/Users/xiabofei/Documents/cchdir/encapsulate/data/'
 # 表单处理
 from flask_wtf import Form
 from wtforms import StringField, SubmitField
-from wtforms.validators import Required
+from wtforms.validators import DataRequired
 # boostrap样式
 from flask_bootstrap import Bootstrap
 # 模板渲染
@@ -35,14 +35,19 @@ from flask_moment import Moment
 from ipdb import set_trace as st
 
 
+# 起一个app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
 bootstrap = Bootstrap(app)
 moment = Moment(app)
 
-class NameForm(Form):
-    file_name = StringField(u'csv文件名称', validators=[Required()]) 
+class RegForm(Form):
+    file_name = StringField(u'csv文件名称', validators=[DataRequired()]) 
     submit = SubmitField('Submit')
+
+@app.route('/')
+def index():
+    return render_template('default.html')
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -54,29 +59,35 @@ def internal_server_error(e):
 
 @app.route('/dataset-register', methods=['GET', 'POST'])
 def dataset_register():
-    file_name = None
-    form = NameForm()
+    """
+    读入数据 & 数据分割 & 存中间数据
+    """
+    paras = {}
+    paras['file_name'] = None
+    form = RegForm()
+    paras['form'] = form
     if request.method=='POST' and form.validate():
-        paras = {}
         paras['file_name'] = form.file_name.data
-        ret = similarity(paras)
-        return render_template('similarity.html', grouping_rule = ret)
-    return render_template('dataset_register.html', form = form, file_name = file_name)
-
-def data_curation(path):
-    """
-    读入数据 转换为csv格式
-    """
-    df_SynPUFs = ix.read_csv_file_to_df(P(path), sep=',')
-    df_SynPUFs = df_SynPUFs.drop(['Unnamed: 0'], axis=1)
-    data_x_raw = df_SynPUFs[df_SynPUFs.columns.difference(['_LBL'])]
-    data_y = df_SynPUFs['_LBL']
-    # 中间数据本地序列化 (后期可以用数据库去存取)
-    df_SynPUFs.to_pickle(tmp_dir+'df_SynPUFs')
-    data_x_raw.to_pickle(tmp_dir+'data_x_raw')
-    data_y.to_pickle(tmp_dir+'data_y')
-    # 将本地序列化数据path存在session中
-    session['pd_dataFrame'] = ['df_SynPUFs', 'data_x_raw', 'data_y']
+        try:
+            # 读入数据
+            df_SynPUFs = ix.read_csv_file_to_df(P(paras['file_name']), sep=',')
+            # 数据按列分割
+            df_SynPUFs = df_SynPUFs.drop(['Unnamed: 0'], axis=1)
+            data_x_raw = df_SynPUFs[df_SynPUFs.columns.difference(['_LBL'])]
+            data_y = df_SynPUFs['_LBL']
+            # 存中间数据 (后期用数据库存取)
+            df_SynPUFs.to_pickle(tmp_dir+'df_SynPUFs')
+            data_x_raw.to_pickle(tmp_dir+'data_x_raw')
+            data_y.to_pickle(tmp_dir+'data_y')
+            # session中存中间数据
+            session['pd_dataFrame'] = ['df_SynPUFs', 'data_x_raw', 'data_y']
+            paras['pd_shape'] = [df_SynPUFs.shape, data_x_raw.shape, data_y.shape]
+            paras['curated_data'] = session['pd_dataFrame']
+            # raise KeyError("Test an error message")
+            return render_template('dataset_register.html', **paras)
+        except Exception,e:
+            return render_template('error.html', e_message=e)
+    return render_template('dataset_register.html', **paras)
 
 def similarity(paras):
     """

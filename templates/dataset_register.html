@@ -5,8 +5,30 @@
 
 {% block page_content %}
 <div class="page-header">
-    <h1>Data Curation</h1>
-    <h2>{% if file_name %}{{ file_name }}{% else %}{% endif %}</h2>
+    <h1>数据获取</h1>
 </div>
 {{ wtf.quick_form(form) }}
+<!--<div class="page-header">-->
+    <!--<h1>数据信息</h1>-->
+<!--</div>-->
+    {% if curated_data %}
+    <table class='table table-striped'> 
+        <thead>
+            <tr>
+                <th>数据名称</th>
+                <th>数据维度</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if curated_data|length == pd_shape|length %}
+                {% for i in range(curated_data|length) %}
+                <tr>
+                    <td>{{ curated_data[i] }}</td>
+                    <td>{{ pd_shape[i] }}</td>
+                </tr>
+            {% endfor %}
+            {% endif %}
+        </tbody>
+    </table>
+    {% endif %}
 {% endblock %}
