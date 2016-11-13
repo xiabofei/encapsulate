@@ -37,8 +37,6 @@ from ipdb import set_trace as st
 import json
 from pandas.io.json import json_normalize
 
-
-# 起一个app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
 bootstrap = Bootstrap(app)
@@ -125,37 +123,69 @@ def feature_selection():
             # 模拟向数据库写入selected的数据
             data_x = data_x_raw[slct_cols]
             data_x.to_pickle(tmp_dir+'data_x') 
-            # head_sample = data_x.head().to_json(force_ascii=False)
+            # 页面展现特征选择后的结果
             head_sample = data_x.head(n=20).to_html(classes='table table-striped')
             paras['head_sample'] = head_sample
             paras['selected_feature'] = info_gain_feature
-            print type(info_gain_feature)
             return render_template('feature_selection.html', **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)
     return render_template('feature_selection.html', **paras)
 
+# 患者聚类
+class PatCluForm(Form):
+    strategy = SelectField(u'数据降维方法', choices=[("PCA","PCA")]) 
+    data_X = StringField(u'样本数据', default='data_x', validators=[DataRequired()]) 
+    data_Y = StringField(u'样本标签', default='data_y', validators=[DataRequired()])
+    selection_parameter_value = StringField(u'特征降维数', default='5', validators=[DataRequired()])
+    algorithm = SelectField(u'聚类方法', choices=[("KMeans","KMeans")]) 
+    n_clusters = StringField(u'拟聚类数', default=2, validators=[DataRequired()])
+    metric = SelectField(u'聚类评估指标', choices=[("silhouette","silhouette")])
+    submit = SubmitField('Submit')
+    pass
+@app.route('/patient-clustering', methods=['GET', 'POST'])
+def patient_clustering():
+    paras = {}
+    form = PatCluForm()
+    paras['form'] = form
+    if request.method=='POST' and form.validate():
+        try:
+            # 模拟从数据库获取数据
+            data_x = pd.read_pickle(tmp_dir+form.data_X.data)
+            data_y = pd.read_pickle(tmp_dir+form.data_Y.data)
+            # 数据降维 & 患者聚类 & 聚类评分
+            tf = ix.transform_data_with_learning_metric(
+                        metric=str(form.strategy.data), 
+                        data_X=data_x, 
+                        data_Y=data_y, 
+                        params={'n_components':int(form.selection_parameter_value.data)})
+            labels = ix.execute_clustering(data_X=tf,
+                    algorithm=str(form.algorithm.data),
+                    params={'init':'k-means++', 'n_init':10, 'n_clusters':int(form.n_clusters.data)})
+            sil_score = ix.evaluate_clustering_without_groundtruth(
+                    data_X=data_x, 
+                    cluster_id=labels.ix[:,0].values,
+                    metric=str(form.metric.data))
+            # 特征在患者分群上的显著性
+            pheno_dic, feature_cat = ix.phenotyping(data_X=data_x.astype(int), cluster_id=labels, max_cat_number = 10)
+            bifeature = feature_cat.loc[feature_cat['feature_type'] == 'binary'].index
+            data = pd.concat([data_y, data_x[bifeature], labels], axis=1)
+            r1 = data['cluster_id'].value_counts()
+            r2 = data.groupby('cluster_id').agg(np.count_nonzero)
+            r3 = pd.concat([r1, r2], axis=1)
+            r3.rename(columns={'cluster_id':'TOTAL', 'drv_lbl':'POS_OUTCOME'}, inplace=True)
+            paras['r3'] = r3.to_html(classes='table table-striped')
+            stat = ix.cluster_statistics(data_X=data_x, cluster_id=labels, f_type=feature_cat)
+            paras['stat'] = stat.to_html(classes='table table-striped')
+            return render_template('patient_clustering.html', **paras)
+        except Exception,e:
+            return render_template('error.html', e_message=e)
+    return render_template('patient_clustering.html', **paras)
+
 def similarity(paras):
     """
     The SynPUFs-Similarity Process
     """
-    tf = ix.transform_data_with_learning_metric(metric='PCA', data_X=data_x, data_Y=data_y, params={'n_components':12})
-    labels = ix.execute_clustering(data_X=tf,
-            algorithm='KMeans',
-            params={'init':'k-means++', 'n_init':10, 'n_clusters':2})
-    sil_score = ix.evaluate_clustering_without_groundtruth(data_X=data_x, 
-            cluster_id=labels.ix[:,0].values,
-            metric='silhouette')
-    pheno_dic, feature_cat = ix.phenotyping(data_X=data_x.astype(int),
-            cluster_id=labels,
-            max_cat_number = 10)
-    bifeature = feature_cat.loc[feature_cat['feature_type'] == 'binary'].index
-    data = pd.concat([data_y, data_x[bifeature], labels], axis=1)
-    r1 = data['cluster_id'].value_counts()
-    r2 = data.groupby('cluster_id').agg(np.count_nonzero)
-    r3 = pd.concat([r1, r2], axis=1)
-    r3.rename(columns={'cluster_id':'TOTAL', 'drv_lbl':'POS_OUTCOME'}, inplace=True)
-    stat = ix.cluster_statistics(data_X=data_x, cluster_id=labels, f_type=feature_cat)
     tree, treegraph, accuracy = ix.grouping_rule_mining(data_x, labels, algorithm='CART', \
             params={'criterion':'gini', 'min_samples_leaf':10, 'max_depth':10})
     png = treegraph.create_png()
@@ -168,4 +198,4 @@ def similarity(paras):
     return ret
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
