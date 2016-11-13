@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}CCH{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>规则挖掘</h1>
+</div>
+{{ wtf.quick_form(form) }}
+    {% if rule_dict  %}
+        <div class="page-header">
+            <h1>患者分群规则</h1>
+        </div>
+        <!--分别显示每种病患类型的分群规则-->
+        {% for patient,rules in rule_dict.items() %}
+            <h2>病患类型 {{ patient }}</h2>
+            {% for rule in rules %}
+                <p>{{ rule }}</p>
+            {% endfor %}
+        {% endfor %}
+    {% endif %}
+{% endblock %}

@@ -1,6 +1,7 @@
 #encoding=utf8
 """
 encapsulate cch api as web service via flask
+This aims at a tiny demo for demonstration but not for realease version
 """
 from flask import Flask, request, redirect, url_for, session
 import sys
@@ -84,7 +85,7 @@ def dataset_register():
             session['pd_dataFrame'] = ['df_SynPUFs', 'data_x_raw', 'data_y']
             paras['pd_shape'] = [df_SynPUFs.shape, data_x_raw.shape, data_y.shape]
             paras['curated_data'] = session['pd_dataFrame']
-            return render_template('dataset_register.html', **paras)
+            return render_template(url_for('dataset_register'), **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)
     return render_template('dataset_register.html', **paras)
@@ -142,7 +143,6 @@ class PatCluForm(Form):
     n_clusters = StringField(u'拟聚类数', default=2, validators=[DataRequired()])
     metric = SelectField(u'聚类评估指标', choices=[("silhouette","silhouette")])
     submit = SubmitField('Submit')
-    pass
 @app.route('/patient-clustering', methods=['GET', 'POST'])
 def patient_clustering():
     paras = {}
@@ -162,6 +162,8 @@ def patient_clustering():
             labels = ix.execute_clustering(data_X=tf,
                     algorithm=str(form.algorithm.data),
                     params={'init':'k-means++', 'n_init':10, 'n_clusters':int(form.n_clusters.data)})
+            labels.to_pickle(tmp_dir+'labels')
+            print type(labels)
             sil_score = ix.evaluate_clustering_without_groundtruth(
                     data_X=data_x, 
                     cluster_id=labels.ix[:,0].values,
@@ -177,25 +179,46 @@ def patient_clustering():
             paras['r3'] = r3.to_html(classes='table table-striped')
             stat = ix.cluster_statistics(data_X=data_x, cluster_id=labels, f_type=feature_cat)
             paras['stat'] = stat.to_html(classes='table table-striped')
+            paras['score'] = sil_score
             return render_template('patient_clustering.html', **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)
     return render_template('patient_clustering.html', **paras)
 
-def similarity(paras):
-    """
-    The SynPUFs-Similarity Process
-    """
-    tree, treegraph, accuracy = ix.grouping_rule_mining(data_x, labels, algorithm='CART', \
-            params={'criterion':'gini', 'min_samples_leaf':10, 'max_depth':10})
-    png = treegraph.create_png()
-    rule_dict = ix.get_rules(tree.tree_, data_x.columns)
-    ret = []
-    for k, v in rule_dict.items():
-        ret.append(u'患者群'+str(k))
-        for path in v:
-            ret.append(str(path))
-    return ret
+class GroRulMinForm(Form):
+    data_x = StringField(u'样本数据', default='data_x', validators=[DataRequired()]) 
+    labels = StringField(u'样本标签', default='labels', validators=[DataRequired()])
+    algorithm = SelectField(u'规则挖掘算法', choices=[("CART","CART")]) 
+    criterion = SelectField(u'规则生成准则', choices=[("gini","gini")])
+    min_samples_leaf = StringField(u'最小划分空间数', default=10, validators=[DataRequired()])
+    max_depth = StringField(u'规则最大深度', default=10, validators=[DataRequired()])
+    submit = SubmitField('Submit')
+@app.route('/grouping-rule-mining', methods=['GET', 'POST'])
+def grouping_rule_mining():
+    paras = {}
+    form = GroRulMinForm()
+    paras['form'] = form
+    if request.method=='POST' and form.validate():
+        try:
+            # 模拟从数据库获取数据
+            data_x = pd.read_pickle(tmp_dir+form.data_x.data)
+            labels = pd.read_pickle(tmp_dir+form.labels.data)
+            # 数据降维 & 患者聚类 & 聚类评分
+            tree, treegraph, accuracy = ix.grouping_rule_mining(
+                    data_x, 
+                    labels, 
+                    algorithm = str(form.algorithm.data), 
+                    params={'criterion':str(form.criterion.data),
+                            'min_samples_leaf':int(form.min_samples_leaf.data),
+                            'max_depth':int(form.max_depth.data)})
+            png = treegraph.create_png()
+            rule_dict = ix.get_rules(tree.tree_, data_x.columns)
+            paras['rule_dict'] = rule_dict
+            print type(rule_dict)
+            return render_template('grouping_rule_mining.html', **paras)
+        except Exception,e:
+            return render_template('error.html', e_message=e)
+    return render_template('grouping_rule_mining.html', **paras)
 
 if __name__ == '__main__':
     app.run()
