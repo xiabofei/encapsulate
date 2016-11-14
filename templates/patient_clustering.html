@@ -5,22 +5,22 @@
 
 {% block page_content %}
 <div class="page-header">
-    <h1>患者聚类</h1>
+    <h1>step3. 患者聚类</h1>
 </div>
-{{ wtf.quick_form(form) }}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>输入参数</h4></div>
+    <div class="panel-body">{{ wtf.quick_form(form) }}</div>
+</div>
+<div class="panel panel-primary">
     {% if stat %}
-        <div class="page-header">
-            <h1>特征显著性指标</h1>
-        </div>
-        {{ stat|safe }}
+        <div class="panel-heading"><h4>特征显著性指标</h4></div>
+        <div class="panel-body">{{ stat|safe }}</div>
     {% endif %}
     {% if score %}
-        <div class="page-header">
-            <h1>聚类结果得分</h1>
-        </div>
+        <div class="panel-heading"><h4>聚类结果得分</h4></div>
         <table class='table table-striped'> 
             <tr>
-                <td>{{ score.items()[0][0]  }}</td>
+                <td>{{ score.items()[0][0] }}</td>
                 <td>{{ score.items()[0][1] }}</td>
             </tr>
         </table>

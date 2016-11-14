@@ -5,19 +5,26 @@
 
 {% block page_content %}
 <div class="page-header">
-    <h1>规则挖掘</h1>
+    <h1>step4. 规则挖掘</h1>
 </div>
-{{ wtf.quick_form(form) }}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>输入参数</h4></div>
+    <div class="panel-body">{{ wtf.quick_form(form) }}</div>
+</div>
+<div class="panel panel-primary">
+    <!--显示生成挖掘规则的决策树-->
+    {% if tree_png %}
+        <div class="panel-heading"><h4>患者分群规则树</h4></div>
+        <div class="panel-body"><img src={{ url_for('download_file', filename=tree_png) }} width="666" height="333" /></div>
+    {% endif %}
+    <!--分别显示每种病患类型的分群规则-->
     {% if rule_dict  %}
-        <div class="page-header">
-            <h1>患者分群规则</h1>
-        </div>
-        <!--分别显示每种病患类型的分群规则-->
-        {% for patient,rules in rule_dict.items() %}
-            <h2>病患类型 {{ patient }}</h2>
-            {% for rule in rules %}
-                <p>{{ rule }}</p>
+        <div class="panel-heading"><h4>患者分群规则</h4></div>
+        <div class="panel-body">
+            {% for patient,rules in rule_dict.items() %}
+                <h2>病患类型 {{ patient }}</h2>
+                {% for rule in rules %}<p>{{ rule }}</p>{% endfor %}
             {% endfor %}
-        {% endfor %}
+        </div>
     {% endif %}
 {% endblock %}

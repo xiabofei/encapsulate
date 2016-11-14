@@ -5,38 +5,39 @@
 
 {% block page_content %}
 <div class="page-header">
-    <h1>特征选择</h1>
+    <h1>step2. 特征选择</h1>
 </div>
-{{ wtf.quick_form(form) }}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>输入参数</h4></div>
+    <div class="panel-body">{{ wtf.quick_form(form) }}</div>
+</div>
+<div class="panel panel-primary">
     {% if head_sample %}
-        <div class="page-header">
-            <h1>特征得分</h1>
-            <table class='table table-striped'> 
-                <thead>
+    <div class="panel-heading"><h4>特征选择结果</h4></div>
+    <div class="page-header">
+        <table class='table table-striped'> 
+            <thead>
+                <tr>
+                    <th>特征名称</th>
+                    <th>特征得分</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for l in selected_feature %}
+                    {% if l|length == 2 %}
                     <tr>
-                        <th>特征名称</th>
-                        <th>特征得分</th>
+                        <td>{{ l['feature_name'] }}</td>
+                        <td>{{ l['feature_scores'] }}</td>
                     </tr>
-                </thead>
-                <tbody>
-                    {% for l in selected_feature %}
-                        {% if l|length == 2 %}
-                        <tr>
-                            <td>{{ l['feature_name'] }}</td>
-                            <td>{{ l['feature_scores'] }}</td>
-                        </tr>
-                        {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% endif %}
     {% if selected_feature %}
-        <div class="page-header">
-            <h1>特征选择后数据样本</h1>
-        </div>
-        <table class='table table-striped'> 
-        {{ head_sample|safe }}
-        </table>
+    <div class="panel-heading"><h4>特征选择后数据样本</h4></div>
+    <div class="panel-body"><table class='table table-striped'> {{ head_sample|safe }}</table></div>
     {% endif %}
+</div>
 {% endblock %}

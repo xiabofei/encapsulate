@@ -3,7 +3,7 @@
 encapsulate cch api as web service via flask
 This aims at a tiny demo for demonstration but not for realease version
 """
-from flask import Flask, request, redirect, url_for, session
+from flask import Flask, request, redirect, url_for, session, send_from_directory
 import sys
 # 检查参数
 if len(sys.argv)<2: raise ValueError("input argv error")
@@ -40,8 +40,13 @@ from pandas.io.json import json_normalize
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
+app.config['UPLOAD_FOLDER'] = tmp_dir
 bootstrap = Bootstrap(app)
 moment = Moment(app)
+
+@app.route('/uploads/<path:filename>')
+def download_file(filename):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 @app.route('/')
 def index():
@@ -85,7 +90,7 @@ def dataset_register():
             session['pd_dataFrame'] = ['df_SynPUFs', 'data_x_raw', 'data_y']
             paras['pd_shape'] = [df_SynPUFs.shape, data_x_raw.shape, data_y.shape]
             paras['curated_data'] = session['pd_dataFrame']
-            return render_template(url_for('dataset_register'), **paras)
+            return render_template('dataset_register.html', **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)
     return render_template('dataset_register.html', **paras)
@@ -203,7 +208,7 @@ def grouping_rule_mining():
             # 模拟从数据库获取数据
             data_x = pd.read_pickle(tmp_dir+form.data_x.data)
             labels = pd.read_pickle(tmp_dir+form.labels.data)
-            # 数据降维 & 患者聚类 & 聚类评分
+            # 挖掘数据库 & 等待内容  
             tree, treegraph, accuracy = ix.grouping_rule_mining(
                     data_x, 
                     labels, 
@@ -212,9 +217,11 @@ def grouping_rule_mining():
                             'min_samples_leaf':int(form.min_samples_leaf.data),
                             'max_depth':int(form.max_depth.data)})
             png = treegraph.create_png()
+            with open(tmp_dir+'picture_out.png', 'wb') as f:
+                    f.write(png)
+                    paras['tree_png'] = 'picture_out.png'
             rule_dict = ix.get_rules(tree.tree_, data_x.columns)
             paras['rule_dict'] = rule_dict
-            print type(rule_dict)
             return render_template('grouping_rule_mining.html', **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)

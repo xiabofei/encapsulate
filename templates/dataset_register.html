@@ -5,10 +5,15 @@
 
 {% block page_content %}
 <div class="page-header">
-    <h1>数据获取</h1>
+    <h1>step1. 数据获取</h1>
 </div>
-{{ wtf.quick_form(form) }}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>输入参数</h4></div>
+    <div class="panel-body">{{ wtf.quick_form(form) }}</div>
+</div>
+<div class="panel panel-primary">
     {% if curated_data %}
+    <div class="panel-heading"><h4>数据获取结果</h4></div>
     <table class='table table-striped'> 
         <thead>
             <tr>
@@ -28,4 +33,5 @@
         </tbody>
     </table>
     {% endif %}
+</div>
 {% endblock %}
