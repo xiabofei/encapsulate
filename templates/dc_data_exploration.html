@@ -7,30 +7,35 @@
 <div class="page-header">
     <h1>数据探索</h1>
 </div>
-<!--每个tab显示一个dataFrame的数据-->
-{% if pickle_file_list %}
+<!--每个tab显示一个dataFrame的数据项meta信息-->
+{% if meta_list %}
 <ul class="nav nav-tabs">
-    {% for i in range(pickle_file_list|length) %}
+    {% for i in range(meta_list|length) %}
         {% if i==0 %}
-            <li class="active"><a data-toggle="tab" href="#menu{{ pickle_file_list[i] }}">{{ pickle_file_list[i] }}</a></li>
+            <li class="active"><a data-toggle="tab" href="#menu{{ meta_list[i][0] }}">{{ meta_list[i][0] }}</a></li>
         {% else %}
-            <li><a data-toggle="tab" href="#menu{{ pickle_file_list[i] }}">{{ pickle_file_list[i] }}</a></li>
+            <li><a data-toggle="tab" href="#menu{{ meta_list[i][0] }}">{{ meta_list[i][0] }}</a></li>
         {% endif %}
     {% endfor %}
 </ul>
-<div class="tab-content">
-    {% for i in range(pickle_file_list|length) %}
+<div class="tab-content" style="overflow-y:scroll;">
+    {% for i in range(meta_list|length) %}
         {% if i==0 %}
-            <div id="menu{{ pickle_file_list[i] }}" class="tab-pane fade in active">
-                <h3>{{ pickle_file_list[i] }}</h3>
-                <p>Some content.</p>
-            </div>
+            <div id="menu{{ meta_list[i][0] }}" class="tab-pane fade in active">
         {% else %}
-            <div id="menu{{ pickle_file_list[i] }}" class="tab-pane fade">
-                <h3>{{ pickle_file_list[i] }}</h3>
-                <p>Some content.</p>
-            </div>
+            <div id="menu{{ meta_list[i][0] }}" class="tab-pane fade">
         {% endif %}
+                <table class='table table-striped'> 
+                    <thead>
+                        <tr>{% for meta in meta_list[i][1][0] %}<th>{{ meta }}</th>{% endfor %}</tr>
+                    </thead>
+                    <tbody>
+                    {% for meta in meta_list[i][1][1] %}
+                        <tr>{% for col in meta %}<td>{{ col }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
     {% endfor %}
 </div>
 {% endif %}
