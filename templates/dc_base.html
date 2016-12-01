@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block navbar %}
-<div class="navbar navbar-inverse" role="navigation">
+<div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
     <div class="container">
         <div class="navbar-header">
             <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
@@ -24,7 +24,7 @@
             <ul class="nav navbar-nav">
                 <li><a href={{ url_for('dc_dataset_register') }}>数据预览</a></li>
                 <li><a href={{ url_for('dc_data_exploration') }}>数据摸底</a></li>
-                <!--<li><a href=>step3 患者聚类</a></li>-->
+                <li><a href={{ url_for('dc_data_cleansing') }}>数据过滤</a></li>
                 <!--<li><a href=>step4 规则挖掘</a></li>-->
             </ul>
         </div>
@@ -34,7 +34,9 @@
 
 {% block content %}
 <div class="container">
-    {% block page_content %}{% endblock %}
+    <div class="jumbotron">
+        {% block page_content %}{% endblock %}
+    </div>
 </div>
 {% endblock %}
 

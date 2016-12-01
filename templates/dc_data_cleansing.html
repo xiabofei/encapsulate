@@ -1,0 +1,41 @@
+{% extends "dc_base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}cch{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h3>数据过滤</h3>
+</div>
+{% if meta_list %}
+<div class="panel-group" id="accordion">
+    {% for meta in meta_list %}
+    <form action="" method="post" role="form">
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                <h4 class="panel-title">
+                    {{ meta[0] }}
+                    <input type="submit" class="btn btn-default" value="过滤">
+                </h4>
+            </div>
+            <div class="panel-body" style="overflow-y: scroll;">
+            <table class='table' border=1> 
+                <tbody>
+                {% for cols in meta[1] %}
+                <tr>
+                    <!--每行的checkbox是否被选中 表示是否更新这一行代表的信息 用df_name.col_name来作为唯一标识的key-->
+                    <td><input type="checkbox" name="{{ meta[0] }}.{{ cols[0] }}"></td>
+                    {% for col in cols %}
+                    <td><input type="text" name="{{meta[0]}}.{{cols[0]}}" value="{{ col }}"></td> 
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </form>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

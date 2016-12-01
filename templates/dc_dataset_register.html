@@ -5,16 +5,62 @@
 
 {% block page_content %}
 <div class="page-header">
-    <h1>数据读取</h1>
+    <h4>数据读取</h4>
 </div>
 <div class="panel panel-default">
-    <div class="panel-heading"><h4>输入参数</h4></div>
-    <div class="panel-body">{{ wtf.quick_form(form, form_type="horizontal", horizontal_columns=('sm',2,5)) }}</div>
+    <div class="panel-heading"><h4>从csv文件读取</h4></div>
+    <div class="panel-body">
+        <form action="" method="post" class="form form-horizontal" role="form">
+            <div class="form-group  required">
+                {{ csv_form.file_list.label(class="control-label col-sm-2") }}
+                <div class="col-sm-5">
+                    {{ csv_form.file_list(class="form-control") }}
+                </div>
+            </div>
+            <div class="form-group  required">
+                {{ csv_form.nrows_list.label(class="control-label col-sm-2") }}
+                <div class="col-sm-5">
+                    {{ csv_form.nrows_list(class="form-control") }}
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-5">
+                    <input class="btn btn-default" type="submit" name="submit" value="csv">
+                </div>
+            </div>
+        </form>
+    </div>
+    {% if df_l_from_csv %}
+    {{ show_df(df_l_from_csv) }}
+    {% endif %}
 </div>
-{% if df_l %}
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>从HDFStore读取</h4></div>
+    <div class="panel-body">
+        <form action="" method="post" class="form form-horizontal" role="form">
+            <div class="form-group  required">
+                {{ df_form.store_path.label(class="control-label col-sm-2") }}
+                <div class="col-sm-5">
+                    {{ df_form.store_path(class="form-control") }}
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-5">
+                    <input class="btn btn-default" type="submit" name="submit" value="df">
+                </div>
+            </div>
+        </form>
+    </div>
+    {% if df_l_from_hdf5 %}
+    {{ show_df(df_l_from_hdf5)  }}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% macro show_df(df_l) -%}
 <div class="panel panel-info">
     <div class="panel-heading"><h4>数据读取结果</h4></div>
-    <table class='table table-striped table-scrollable'> 
+    <table class='table table-striped table-scrollable table-fixedheader'> 
         <thead>
             <tr>
                 <th>数据名称</th>
@@ -33,19 +79,19 @@
 </div>
 <div class="panel-group" id="accordion">
     {% for df in df_l %}
-        <div class="panel panel-info">
-            <div class="panel-heading">
-                <h4 class="panel-title">
-                    <a data-toggle="collapse" href="#collapse{{ df[0] }}">{{ df[0] }}数据预览</a>
-                </h4>
-            </div>
-            <div id="collapse{{ df[0] }}" class="panel-collapse collapse">
-                <div class="panel-body" style="overflow-y: scroll;">
-                    <table class='table table-striped'>{{ df[1].head(n=20).to_html()|safe }}</table>
-                </div>
+    <div class="panel panel-info">
+        <div class="panel-heading">
+            <a data-toggle="collapse" href="#collapse{{ df[0] }}">{{ df[0] }}数据预览</a>
+        </div>
+        <div id="collapse{{ df[0] }}" class="panel-collapse collapse">
+            <div class="panel-body" style="overflow-y: scroll;">
+                {{ df[1].head(n=df_nrow).to_html()|safe }}
             </div>
         </div>
+    </div>
     {% endfor %}
 </div>
-{% endif %}
+{%- endmacro %}
+
+{% block scripts %}
 {% endblock %}
