@@ -5,9 +5,8 @@
 
 {% block page_content %}
 <div class="page-header">
-    <a><h3>基础筛选</h4></a>
-    <li><h5>列过滤 -> 分别展现各列数据的meta信息,支持删除选中的列</h5></li>
-    <li><h5>关联操作 -> 同步更新科研数据的data信息与meta信息</h5></li> </div>
+    <h3>基础过滤</h3>
+</div>
 <div id="meta_info_base">
     {% if meta_list %}
     <div class="panel-group" id="accordion">
@@ -21,7 +20,7 @@
                 </div>
                 <div id="collapse{{ meta[0] }}" class="panel-collapse collapse">
                     <div  class="panel-body" style="overflow-y: scroll;">
-                        <input type="submit" class="btn btn-info" value="筛选">
+                        <input type="submit" class="btn btn-info" value="过滤">
                         <table class='table' border=1> 
                             <tbody>
                             {% for cols in meta[1] %}
@@ -44,13 +43,7 @@
     {% endif %}
 </div>
 <div class="page-header">
-    <a><h3>高级筛选</h3></a>
-    <li><h5>数据类型筛选-> 只保留特定数据类型的列数据</h5></li>
-    <li><h5>列名模糊筛选 -> 如"_SUFF",筛选出以"_SUFF"结尾的列</h5></li>
-    <li><h5>正则筛选 -> 筛选出取值符合正则表达式的列</h5></li>
-    <li><h5>区分度筛选 -> 根据列取值区分度的最小阈值进行筛选</h5></li>
-    <li><h5>缺失值比例筛选 -> 根据列缺失值最大阈值进行筛选</h5></li>
-    <li><h5>均衡度度例筛选 -> 根据列取值的均衡度进行筛选</h5></li>
+    <h3>高级过滤</h3>
 </div>
 {% if meta_list %}
 <div id="meta_info_pro">
@@ -65,10 +58,10 @@
             <div id="collapsepro{{ meta[0] }}" class="panel-collapse collapse">
                 <div  class="panel-body" style="overflow-y: scroll;">
                     <div class="form-group col-xs-4">
-                        <a id="propost{{ meta[0] }}" class="btn btn-info active" role="button">筛选</a>
+                        <a id="propost{{ meta[0] }}" class="btn btn-info active" role="button">过滤</a>
                         </br>
                         <label>data_type</label>
-                        <select class="form-control" name="data_type">
+                        <select id="multiple_data_type" multiple="multiple" class="form-control" name="data_type">
                             <option>character</option>
                             <option>numeric</option>
                             <option>binary</option>
@@ -76,7 +69,6 @@
                             <option>factor_m</option>
                             <option>factor_s</option>
                             <option>empty</option>
-                            <option></option>
                         </select> 
                         <label>col_name_pattern</label>
                         <input type="text" class="form-control" name="col_name_pattern" value="">
@@ -116,11 +108,11 @@
 <script src={{ url_for('static', filename='jquery.js') }}></script>
 <script type=text/javascript>$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};</script>
 <script type=text/javascript>
-<!--function get_selected_df_names(){-->
-        <!--var items = [];-->
-        <!--$('select#multiple_data_type option:selected').each(function(){ items.push($(this).val()); });-->
-        <!--return items.join(', ');-->
-<!--}-->
+function get_selected_df_names(){
+        var items = [];
+        $('select#multiple_data_type option:selected').each(function(){ items.push($(this).val()); });
+        return items.join(', ');
+}
 $(function(){
         $("a[id^='propost']").click(function()
             {
@@ -130,8 +122,8 @@ $(function(){
                 url: $SCRIPT_ROOT+'{{ url_for('dc_pro_data_cleansing') }}',
                 type: 'get',
                 data: { 'df_name':df_name, 
-                        'data_type':$(this).siblings("[name='data_type']").attr("value"),
-                        <!--'data_type':get_selected_df_names(),-->
+                        <!--'data_type':$(this).siblings("[name='data_type']").attr("value"),-->
+                        'data_type':get_selected_df_names(),
                         'col_name_pattern':$(this).siblings("[name='col_name_pattern']").attr("value"),
                         'col_value_expr':$(this).siblings("[name='col_value_expr']").attr("value"),
                         'distinct_ratio':$(this).siblings("[name='distinct_ratio']").attr("value"),

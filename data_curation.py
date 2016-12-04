@@ -61,16 +61,6 @@ class ReadCSVForm(Form):
 class ReadDFForm(Form):
     store_path = StringField(u'HDFStore文件', default=u'data_curation.h5', validators=[DataRequired()])
     submit = SubmitField(u'提交')
-@app.route('/background_process')
-def background_process():
-    try:
-        lang = request.args.get('proglang', 0, type=str)
-        if lang.lower() == 'python':
-            return jsonify(result='You are wise')
-        else:
-            return jsonify(result='Try again.')
-    except Exception as e:
-        return str(e)
 @app.route('/dc-dataset-register', methods=['GET','POST'])
 def dc_dataset_register():
     paras = {}
@@ -185,15 +175,23 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
     """
     ret = []
     meta_list_write_to_local = []
-    meta_from_peek = ['col_name', 'col_datatype']
+    meta_from_peek = ['col_name', 'col_datatype', 'col_factornum']
     meta_list = meta_from_peek + ['value_range', 'missing_value_percentage']
     meta_show_name_map = {'col_name':u'字段名称',
                           'col_datatype':u'字段类型',
+                          'col_factornum':u'区分度',
                           'value_range':u'取值范围',
                           'missing_value_percentage':u'缺失值比例'}
     for col_name in df_peek.columns:
         # 需要从peek中抽取的列信息
-        tmp = [ df_peek[col_name][meta] for meta in meta_from_peek ]
+        tmp = []
+        for meta in meta_from_peek:
+            if meta=='col_factornum':
+                distinct_ratio = int(df_peek[col_name][meta]) / (float(len(df_ori.index))+1)
+                tmp.append(round(distinct_ratio,2))
+            else:
+                tmp.append(df_peek[col_name][meta])
+        # tmp = [ df_peek[col_name][meta] for meta in meta_from_peek ]
         # 列变量取值范围
         dtype = df_peek[col_name]['col_datatype']
         if dtype not in avaiable_dtypes:
@@ -274,10 +272,14 @@ def draw_fig_for_df_oneCol(df, df_name, col_name, dtype, tmp):
         finally:
             pass
 
+## 基础过滤涉及到的配置变量
 # 是否处理该列的checkbox的判断标志
 app.config['CHECKED'] = u'on'
 # 记录对列指定操作的解释
-app.config['COL_ACTION'] = {'DEL':u'删除掉指定列'}
+app.config['COL_ACTION'] = { 
+                            'DEL' : u'删除掉指定列',
+                            'REMAIN' : u'保留指定列'
+                            }
 @app.route('/dc-data-cleansing', methods=['GET', 'POST'])
 def dc_data_cleansing():
     paras = {}
@@ -291,7 +293,7 @@ def dc_data_cleansing():
                     pprint(request.form.getlist(rf_k))
                     df_name = rf_k.split(DF_COL_SPLIT)[0]
                     col_name = rf_k.split(DF_COL_SPLIT)[1]
-                    deal_with_column_filtering(store, df_name, col_name, 'DEL')
+                    deal_base_column_filtering(store, df_name, col_name, 'DEL')
             # 更新显示meta信息
             paras['meta_list'] = get_df_meta_info(store) 
             store.close()
@@ -301,6 +303,91 @@ def dc_data_cleansing():
     paras['meta_list'] = get_df_meta_info(store) 
     store.close()
     return render_template('dc_data_cleansing.html', **paras)
+
+# 后端需要从ajax接收的参数
+col_filter_condition_paras = {
+                              'data_type':'str',         # 保留该类型的列数据
+                              'col_name_pattern':'str',  # 保留列名符合要求的列数据
+                              'col_value_expr':'expr',    # 正则表达式根据列的值过滤
+                              'distinct_ratio':'float',    # 根据列的区分度过滤
+                              'non_NA_ratio':'float',      # 根据列数据非空率
+                              'balance_ratio':'float'      # 列数据平衡率
+                              }
+@app.route('/dc-pro-data-cleansing', methods=['GET'])
+def dc_pro_data_cleansing():
+    """
+    处理高级列过滤
+    """
+    paras = {}
+    try:
+        # 确认ajax传回的df_name存在于HDFStore中
+        store = pd.HDFStore(HDF5_path)
+        df_name = request.args.get('df_name', None)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+        # 接受ajax传回的传入select_columns_by_condition参数
+        received_condition = {}
+        for k in col_filter_condition_paras.keys():
+            if request.args.get(k)!='':
+                received_condition[k] = request.args.get(k)
+        # 验证ajax传入的参数
+        assert validate_pro_data_cleansing(received_condition), "recived paras from ajax are not valid"
+        # 执行过滤模块 返回过滤后剩下的列名
+        df = store[df_name+DATA_SUFF]
+        ix.tag_meta_auto(df)
+        st(context=21)
+        remained_col_names = ix.select_columns_by_condition(df,**received_condition)
+        # 更新HDFStore中的数据(DATA数据 META数据) 默认DATA数据和META数据都存在
+        deal_pro_column_filtering(store, df_name, remained_col_names, 'REMAIN')
+        # 读取出更新后的values 
+        meta_table = store.get(HDF5_PREF+df_name+META_SUFF)
+        paras['meta_table'] = meta_table
+        store.close()
+        return render_template('dc_pro_data_cleansing.html', **paras)
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
+
+def validate_pro_data_cleansing(received_condition):
+    """
+    功能
+        验证ajax传入的列过滤参数有效性
+        将部分传入字符转换为数值
+    """
+    try:
+        for key in received_condition:
+            key_type = col_filter_condition_paras.get(key)
+            if key_type=='int':
+                received_condition[key] = int(received_condition[key])
+            elif key_type=='float':
+                received_condition[key] = float(received_condition[key])
+            else:
+                continue
+        return True
+    except Exception,e:
+        return False
+    return False
+
+def deal_pro_column_filtering(store, df_name, remained_col_names, action):
+    """
+    功能
+        将列过滤的高级结果同步到HDFStore中
+    入参
+        store : 与HDF5存储的接口
+        df_name : 在HDF5中需要处理的dataframe
+        col_name : 需要处理的列名
+        action : 需要对列进行的操作
+    """
+    assert action in app.config['COL_ACTION'].keys(), \
+            "columns filtering action not in app.config['COL_ACTION']"
+    assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+    for col_name in remained_col_names:
+        assert col_name in store[df_name+DATA_SUFF].columns, \
+                "column %s not in dataframe %s"%(col_name, df_name+DATA_SUFF)
+    # 更新HDFStore中的数据
+    store[df_name+DATA_SUFF] = store[df_name+DATA_SUFF][remained_col_names]
+    # 删除列的meta信息 这里需要明确处理的对象是dataframe
+    store[df_name+META_SUFF] = store[df_name+META_SUFF].loc[store[df_name+META_SUFF]['col_name'].isin(remained_col_names)]
 
 def get_df_meta_info(store):
     """
@@ -317,7 +404,7 @@ def get_df_meta_info(store):
             meta_list.append( (extract_dataframe_name(s_k, '/', META_SUFF), store.get(s_k).values) )
     return meta_list
 
-def deal_with_column_filtering(store, df_name, col_name, action):
+def deal_base_column_filtering(store, df_name, col_name, action):
     """
     功能
         判断df_name+DATA_SUFF是否在store中存在

@@ -5,7 +5,10 @@
 
 {% block page_content %}
 <div class="page-header">
-    <h4>数据读取</h4>
+    <a><h3>数据读取</h3></a>
+    <li><h5>格式转换 -> 读取csv格式数据并转换为DataFrame格式</h5></li>
+    <li><h5>高效序列化 -> 将DataFrame数据存储于HDFStore中</h5></li>
+    <li><h5>数据展现 -> 展现科研数据与Meta信息</h5></li>
 </div>
 <div class="panel panel-default">
     <div class="panel-heading"><h4>从csv文件读取</h4></div>
@@ -93,5 +96,3 @@
 </div>
 {%- endmacro %}
 
-{% block scripts %}
-{% endblock %}
