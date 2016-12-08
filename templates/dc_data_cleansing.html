@@ -21,20 +21,8 @@
                 </div>
                 <div id="collapse{{ meta[0] }}" class="panel-collapse collapse">
                     <div  class="panel-body" style="overflow-y: scroll;">
-                        <input type="submit" class="btn btn-info" value="筛选">
-                        <table class='table' border=1> 
-                            <tbody>
-                            {% for cols in meta[1] %}
-                            <tr>
-                                <!--每行的checkbox是否被选中 表示是否更新这一行代表的信息 用df_name.col_name来作为唯一标识的key-->
-                                <td><input type="checkbox" name="{{ meta[0] }}.{{ cols[0] }}"></td>
-                                {% for col in cols %}
-                                <td><input type="text" name="{{meta[0]}}.{{cols[0]}}" value="{{ col }}"></td> 
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
+                        <input type="submit" class="btn btn-info" value="过滤">
+                        {{ show_df_as_table(meta[1],meta[0],"if_checkbox") }}
                     </div>
                 </div>
             </div>
@@ -89,19 +77,9 @@
                         <label>balance_ratio</label>
                         <input type="text" class="form-control" name="balance_ratio" value="">
                     </div>
-                </div>
-                <div id="meta_table_pro">
-                        <table class='table' border=1> 
-                            <tbody>
-                            {% for cols in meta[1] %}
-                            <tr>
-                                {% for col in cols %}
-                                <td>{{ col }}</td> 
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
+                    <div id="meta_table_pro">
+                            {{ show_df_as_table(meta[1],meta[0]) }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -110,6 +88,34 @@
     {% endif %}
 </div>
 {% endblock %}
+
+{% macro show_df_as_table(df,df_name,if_checkbox) -%}
+<!--将dataframe转换为table显示,并根据传入参数控制是否有checkbox-->
+<table class='dataframe' border=1> 
+    <thead>
+        <tr>
+            {% if if_checkbox is defined %}
+            <th>#</th>
+            {% endif %}
+            {% for col_name in df.columns %}
+            <th>{{ col_name }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in range(df.index|length) %}
+    <tr>
+        {% if if_checkbox is defined %}
+        <td><input type="checkbox" name="{{ df_name }}.{{ df.iloc[r][0] }}"></td>
+        {% endif %}
+        {% for c in range(df.iloc[r]|length) %}
+        <td>{{ df.iloc[r][c] }}</td> 
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{%- endmacro %}
 
 {% block scripts  %}
 {{ super() }}

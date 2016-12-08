@@ -22,6 +22,7 @@ meta_dir = '/Users/xiabofei/Documents/cchdir/encapsulate/meta_data/'
 HDF5_path = '/Users/xiabofei/Documents/cchdir/encapsulate/data_curation.h5'
 DATA_SUFF = '_DATA'
 META_SUFF = '_META'
+MD5_FILE = '/Users/xiabofei/Documents/cchdir/encapsulate/DATAFRAME_MD5'
 HDF5_PREF = '/'
 DF_COL_SPLIT = '.'
 ix.config.g_conf['settings_datatypemaxfactornum'] = 1000
@@ -34,9 +35,11 @@ from flask_moment import Moment
 from copy import copy, deepcopy
 from pprint import pprint
 from ipdb import set_trace as st
-from time import sleep
+# from time import sleep
 import pylab
 import glob
+import hashlib
+import json
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
@@ -81,9 +84,16 @@ def dc_dataset_register():
                         for (f,n) in zip(paras['file_list'], paras['nrows_list'])
                         ]
                 # 以HDF5格式存入本地 ( 暂时用后缀区分data信息和meta信息 ) 
+                # 并计算每个dataframe的md5值 并存入数据表中
                 with pd.HDFStore(HDF5_path) as store:
+                    df_md5_tmp = {}
                     for df in df_l:
-                        store.put(df[0]+DATA_SUFF, df[1])
+                        md5 = calculate_dataframe_md5(df[1])
+                        df_name = df[0]+DATA_SUFF
+                        df_md5_tmp[df_name] = md5
+                        store.put(df_name, df[1])
+                    # 与原有的(df_name, md5)进行merge
+                    merge_dataframe_md5(df_md5_tmp)
                 paras['df_l_from_csv'] = df_l
                 paras['df_nrow'] = 20
                 return render_template('dc_dataset_register.html', **paras)
@@ -107,6 +117,61 @@ def dc_dataset_register():
         else:
             return render_template('dc_dataset_register.html', **paras)
     return render_template('dc_dataset_register.html', **paras)
+
+def calculate_dataframe_md5(df):
+    """
+    功能
+        计算dataframe的md5的值
+    入参
+        df : 需要计算md5的dataframe的instance
+    """
+    buf = df.to_csv()
+    return hashlib.md5(buf).hexdigest()
+
+def merge_dataframe_md5(df_md5_tmp):
+    """
+    功能
+        更新dataframe对应的md5值并与本地之前存储的md5进行融合
+    入参
+        df_md5_tmp : 需要被融合的dataframe md5
+    """
+    with open(MD5_FILE,'w+') as f:
+        df_md5 = {}
+        if os.path.isfile(MD5_FILE) and os.stat(MD5_FILE).st_size!=0:
+            df_md5 = json.load(f)
+        for d,m in df_md5_tmp.items():
+            df_md5[d] = m
+        json.dump(df_md5, f)
+
+def if_dataframe_md5_diff(df_name, df):
+    """
+    功能
+        通过比较md5, 检查dataframe是否变化
+    入参
+        df_name : 从原有记录中找md5值的key
+        df : dataframe的instance
+    出参
+        boolean : True则表明dataframe有更新 False表示dataframe没有更新
+    """
+    md5_new = calculate_dataframe_md5(df)
+    with open(MD5_FILE,'w+') as f:
+        df_md5 = {}
+        if os.path.isfile(MD5_FILE) and os.stat(MD5_FILE).st_size!=0:
+            df_md5 = json.load(f)
+        if df_name not in df_md5.keys():
+            df_md5[df_name] = md5_new 
+            json.dump(df_md5, f)
+            return True
+        else:
+            md5_old = df_md5[df_name]
+            # dataframe没有改变
+            if md5_old==md5_new:
+                json.dump(df_md5, f)
+                return False
+            else:
+                df_md5[df_name] = md5_new 
+                json.dump(df_md5, f)
+                return True
 
 def extract_dataframe_name(name, pref, suff):
     """
@@ -140,6 +205,7 @@ def dc_data_exploration():
             for df_name in store.keys():
                 if df_name.endswith(DATA_SUFF) and isinstance(store.get(df_name), pd.DataFrame):
                     df_list.append([df_name, store.get(df_name)])
+            # 验证df_list的md5信息是否有改变
             # 生成meta信息(最主要的就是变量类型自动识别)
             for df in df_list:
                 ix.tag_meta_auto(df[1], num2factor_threshold=10)
@@ -153,6 +219,7 @@ def dc_data_exploration():
             return render_template('dc_data_exploration_content.html', **paras)
         except Exception,e:
             return render_template('dc_error.html', e_message=e)
+    # 如果是get请求 也在div中加载相应的内容
     return render_template('dc_data_exploration.html', **paras)
 
 # cch包可识别的数据类型
@@ -180,6 +247,7 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
     meta_show_name_map = {'col_name':u'字段名称',
                           'col_datatype':u'字段类型',
                           'col_factornum':u'区分度',
+                          'distinct_ratio':u'区分度',
                           'value_range':u'取值范围',
                           'missing_value_percentage':u'缺失值比例'}
     for col_name in df_peek.columns:
@@ -219,6 +287,8 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
     # assert len(meta_list)==len(ret[0]), "meta data table columns not match"
     try:
         # 将(不包含分布图)信息存入dataframe中
+        # 存放meta的dataframe中的col_name变成distinct_ratio
+        meta_list = [ m if m!='col_factornum' else 'distinct_ratio' for m in meta_list ]
         df_col_meta = pd.DataFrame(columns=meta_list)
         for i in range(len(meta_list_write_to_local)):
             df_col_meta.loc[i] = meta_list_write_to_local[i]
@@ -226,7 +296,7 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
         with pd.HDFStore(HDF5_path) as store:
             store.put(df_name+META_SUFF, df_col_meta)
     except Exception,e:
-        from ipdb import set_trace as st
+        print e
         st(context=21)
     finally:
         pass
@@ -335,12 +405,11 @@ def dc_pro_data_cleansing():
         # 执行过滤模块 返回过滤后剩下的列名
         df = store[df_name+DATA_SUFF]
         ix.tag_meta_auto(df)
-        st(context=21)
         remained_col_names = ix.select_columns_by_condition(df,**received_condition)
         # 更新HDFStore中的数据(DATA数据 META数据) 默认DATA数据和META数据都存在
         deal_pro_column_filtering(store, df_name, remained_col_names, 'REMAIN')
         # 读取出更新后的values 
-        meta_table = store.get(HDF5_PREF+df_name+META_SUFF)
+        meta_table = store.get(hdf5_pref+df_name+meta_suff)
         paras['meta_table'] = meta_table
         store.close()
         return render_template('dc_pro_data_cleansing.html', **paras)
@@ -389,19 +458,28 @@ def deal_pro_column_filtering(store, df_name, remained_col_names, action):
     # 删除列的meta信息 这里需要明确处理的对象是dataframe
     store[df_name+META_SUFF] = store[df_name+META_SUFF].loc[store[df_name+META_SUFF]['col_name'].isin(remained_col_names)]
 
-def get_df_meta_info(store):
+def get_df_meta_info(store, col_datatype='ALL'):
     """
     功能
         从store中读取并更新meta信息
     入参
         store : 关联到hdf5的连接
+        data_type : 需要查询的数据类型('ALL'为全体类型, 否则必须是avaiable_dtypes中的一种类型)
     出参
-        meta_list : 返回最新的meta_info
+        meta_list : 返回最新的meta_info(dataframe名, dataframe实例)
     """
     meta_list = []
-    for s_k in store.keys():
-        if s_k.endswith(META_SUFF) and isinstance(store.get(s_k), pd.DataFrame): 
-            meta_list.append( (extract_dataframe_name(s_k, '/', META_SUFF), store.get(s_k).values) )
+    if col_datatype=='ALL':
+        for s_k in store.keys():
+            if s_k.endswith(META_SUFF) and isinstance(store.get(s_k), pd.DataFrame): 
+                meta_list.append( (extract_dataframe_name(s_k, '/', META_SUFF), store.get(s_k)) )
+    else:
+        assert col_datatype in avaiable_dtypes, u"datatype %s is not in available type"%(col_datatype)
+        for s_k in store.keys():
+            if s_k.endswith(META_SUFF) and isinstance(store.get(s_k), pd.DataFrame): 
+                df = store.get(s_k)
+                df = df[df['col_datatype']==col_datatype]
+                meta_list.append( (extract_dataframe_name(s_k, '/', META_SUFF), df) )
     return meta_list
 
 def deal_base_column_filtering(store, df_name, col_name, action):
@@ -425,6 +503,75 @@ def deal_base_column_filtering(store, df_name, col_name, action):
     store[df_name+DATA_SUFF] = store[df_name+DATA_SUFF].drop(col_name,1)
     # 删除列的meta信息 
     store[df_name+META_SUFF] = store[df_name+META_SUFF][store[df_name+META_SUFF]['col_name']!=col_name]
+
+
+@app.route('/dc-feature-engineering', methods=['GET'])
+def dc_feature_engineering():
+    """
+    处理特征转换
+    """
+    paras = {}
+    store = pd.HDFStore(HDF5_path)
+    paras['meta_list'] = get_df_meta_info(store, 'factor_s') 
+    store.close()
+    return render_template('dc_feature_engineering.html', **paras)
+
+@app.route('/dc-feature-engineering/factor', methods=['GET'])
+def dc_feature_engineering_factor():
+    paras = {}
+    try:
+        # 确认ajax传回的df_name存在于HDFStore中
+        store = pd.HDFStore(HDF5_path)
+        df_name = request.args.get('df_name', None)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+        # 接受ajax传回的需要特征打散的factor变量
+        received_feature = []
+        for f in request.args.getlist('checked_feature',None):
+            received_feature.append(f.split('.')[1])
+            print f
+        derive_prefix = request.args.get('derive_prefix')
+        assert validate_feature_engineering_factor(received_feature), "recived paras from ajax are not valid"
+        deal_feature_engineering(store, df_name, received_feature, 'REMAIN', derive_prefix)
+        store.close()
+        return "test"
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
+
+def validate_feature_engineering_factor(received_feature):
+    """
+    验证factor feature传入的参数的有效性
+    """
+    return True
+
+def deal_feature_engineering(store, df_name, feature_list, action, derive_prefix):
+    """
+    功能
+        将传入的feature进行特征打散
+    入参
+        store : 与HDF5存储的接口
+        df_name : 在HDF5中需要处理的dataframe
+        feature_list : 需要处理的列
+        action : 对传入的feature_list进行的操作
+        derive_prefix : 由factor类型变量衍生出新列的前缀名
+    """
+    assert action in app.config['COL_ACTION'].keys(), \
+            "columns action not in app.config['COL_ACTION']"
+    assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+    for feature in feature_list:
+        assert feature in store[df_name+DATA_SUFF].columns, \
+                "column %s not in dataframe %s"%(feature, df_name+DATA_SUFF)
+    df = store[df_name+DATA_SUFF]
+    ix.tag_meta_auto(df)
+    derived = []
+    for feature in feature_list:
+        t = ix.derive_columns_from_factor(df, feature, derive_prefix=derive_prefix)
+        derived.append(t)
+    df = pd.concat([df]+derived, axis=1, join_axes=[df.index])
+    # 更新data信息
+    store[df_name+DATA_SUFF] = df
+    # 生成衍生信息后再调用一次data_exploration生成meta信息
 
 if __name__ == '__main__':
     app.run()
