@@ -10,36 +10,35 @@
 </ul>
 <div class="tab-content" style="overflow-y:scroll;">
     {% for i in range(meta_list|length) %}
-    {% if i==0 %}
-    <div id="menu{{ meta_list[i][0] }}" class="tab-pane fade in active">
+        {% if i==0 %}
+        <div id="menu{{ meta_list[i][0] }}" class="tab-pane fade in active">
         {% else %}
         <div id="menu{{ meta_list[i][0] }}" class="tab-pane fade">
-            {% endif %}
+        {% endif %}
             <table class='table' border=1> 
                 <thead>
-                    <tr>{% for meta in meta_list[i][1][0] %}<th>{{ meta }}</th>{% endfor %}<th>详细分布信息</th></tr>
+                    <tr>{% for meta in meta_list[i][1][0] %}<th>{{ meta }}</th>{% endfor %}</tr>
                 </thead>
-                <!--1. 显示每一列数据的探索信息
-                        2. 显示每一列数据对应的分布图
-                        3. 每一行特有的分布图信息补加在超出共有列名长度的列上-->
                 <tbody>
                 {% for meta in meta_list[i][1][1] %}
                 <tr>
                     <!--显示基础信息-->
-                    {% for col in meta[0:(meta_list[i][1][0]|length)] %}<td>{{ col }}</td>{% endfor %}
+                    {% for col in meta[0:(meta_list[i][1][0]|length-1)] %}
+                    <td>{{ col }}</td>
+                    {% endfor %}
                     <!--控制显示详细信息的按钮-->
                     <td><a data-toggle="collapse" href="#details{{ meta_list[i][0] }}{{ meta[0] }}">分布信息</a></td>
                 </tr>
                 <!--控制是否显示该列的数据分布图-->
-                {% if (meta_list[i][1][0]|length)<(meta|length) %}
                 <tr class="collapse out" id="details{{ meta_list[i][0] }}{{ meta[0] }}">
-                    <td align="center" colspan={{(meta_list[i][1][0]|length)+1}}>
-                        {% for col in meta[(meta_list[i][1][0]|length):] %}
-                        <img src={{ url_for('download_file', filename=col[1], directory='fig') }} width="350" height="350" />
+                    <td align="center" colspan={{ meta_list[i][1][0]|length }}>
+                        {% for col in meta[(meta_list[i][1][0]|length)-1].split('#') %}
+                        {% if col!=''  %}
+                        <img src={{ url_for('download_file', filename=col, directory='fig') }} width="350" height="350" />
+                        {% endif  %}
                         {% endfor %}
                     </td>
                 </tr>
-                {% endif %}
                 {% endfor %}
                 </tbody>
             </table>

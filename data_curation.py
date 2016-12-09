@@ -93,7 +93,7 @@ def dc_dataset_register():
                         df_md5_tmp[df_name] = md5
                         store.put(df_name, df[1])
                     # 与原有的(df_name, md5)进行merge
-                    merge_dataframe_md5(df_md5_tmp)
+                    # merge_dataframe_md5(df_md5_tmp)
                 paras['df_l_from_csv'] = df_l
                 paras['df_nrow'] = 20
                 return render_template('dc_dataset_register.html', **paras)
@@ -133,12 +133,13 @@ def merge_dataframe_md5(df_md5_tmp):
     功能
         更新dataframe对应的md5值并与本地之前存储的md5进行融合
     入参
-        df_md5_tmp : 需要被融合的dataframe md5
+        df_md5_tmp : 需要被融合的{dataframe:md5,...} 
     """
-    with open(MD5_FILE,'w+') as f:
-        df_md5 = {}
+    df_md5 = {}
+    with open(MD5_FILE,'r') as f:
         if os.path.isfile(MD5_FILE) and os.stat(MD5_FILE).st_size!=0:
             df_md5 = json.load(f)
+    with open(MD5_FILE,'w') as f:
         for d,m in df_md5_tmp.items():
             df_md5[d] = m
         json.dump(df_md5, f)
@@ -154,10 +155,13 @@ def if_dataframe_md5_diff(df_name, df):
         boolean : True则表明dataframe有更新 False表示dataframe没有更新
     """
     md5_new = calculate_dataframe_md5(df)
+    # 获取原有的dataframe与md5
+    df_md5 = {}
+    if os.path.isfile(MD5_FILE) and os.stat(MD5_FILE).st_size!=0:
+        f = open(MD5_FILE,'r+')
+        df_md5 = json.load(f)
+        f.close()
     with open(MD5_FILE,'w+') as f:
-        df_md5 = {}
-        if os.path.isfile(MD5_FILE) and os.stat(MD5_FILE).st_size!=0:
-            df_md5 = json.load(f)
         if df_name not in df_md5.keys():
             df_md5[df_name] = md5_new 
             json.dump(df_md5, f)
@@ -199,68 +203,130 @@ def dc_data_exploration():
     paras = {}
     if request.method=='POST':
         try:
-            # 从HDF5中读取dataframe数据 并放入list array中
-            df_list = []
+            # 0.推给前端数据结构为meta_list
+            #   [(df_name1, (meta_column_names1, meta_data1)), (df_name2, (meta_column_names2, meta_data2)), ... ]
+            #   这里的df_name是干净的不带前后缀的
+            meta_list = []
+            # 1.从HDFStore中读取dataframe 并分流为需要exploration和不需要exploration的部分
             store = pd.HDFStore(HDF5_path)
-            for df_name in store.keys():
-                if df_name.endswith(DATA_SUFF) and isinstance(store.get(df_name), pd.DataFrame):
-                    df_list.append([df_name, store.get(df_name)])
-            # 验证df_list的md5信息是否有改变
-            # 生成meta信息(最主要的就是变量类型自动识别)
-            for df in df_list:
+            df_list_need_exploration = []
+            df_list_not_exploration = []
+            divide_dataframe_for_exploration(store, df_list_need_exploration, df_list_not_exploration)
+            # 2.处理需要exploration的dataframe
+            for df in df_list_need_exploration:
                 ix.tag_meta_auto(df[1], num2factor_threshold=10)
-            # 传入的meta_list (name, 2Dtable)
-            # 在处理dataframe meta信息时 处理df_name的名称
-            for i in range(len(df_list)): df_list[i][0] = extract_dataframe_name(df_list[i][0], '/', DATA_SUFF) 
-            # 这条语句不要改
-            meta_list = [ (df[0], trans_peek_to_2Dtable(peek(df[1], meta=True), df[1], df[0])) for df in df_list ]
-            paras['meta_list'] = meta_list
+                # 重写dataframe对应的meta的全表信息 & 信息添加到meta_list中
+                meta_column_names, meta_df = trans_peek_to_2Dtable(peek(df[1], meta=True), df[1], df[0]) 
+                meta_column_names = [ meta_show_name_map.get(meta, u'未设置显示名称') for meta in meta_column_names ]
+                meta_list.append( (df[0], (meta_column_names, meta_df.values)) )
+            # 3.处理不需要exploration的dataframe
+            for df in df_list_not_exploration:
+                meta_df = store.get(df[0]+META_SUFF)
+                meta_column_names = meta_df.columns
+                meta_column_names = [ meta_show_name_map.get(meta, u'未设置显示名称') for meta in meta_column_names ]
+                meta_list.append( (df[0], (meta_column_names, meta_df.values)) )
             store.close()
+            # 4.推给前端meta_list #
+            paras['meta_list'] = meta_list
             return render_template('dc_data_exploration_content.html', **paras)
         except Exception,e:
             return render_template('dc_error.html', e_message=e)
-    # 如果是get请求 也在div中加载相应的内容
     return render_template('dc_data_exploration.html', **paras)
+
+def divide_dataframe_for_exploration(store, df_list_need_exploration, df_list_not_exploration):
+    """
+    功能
+        判断store中哪些dataframe需要被exploration,判断准则:
+            准则1. dataframe的md5值与原有的不同
+            准则2. dataframe没有对应的meta data
+            准则3. dataframe的列数量与meta data表中的不同
+            准则4. meta表对应的列数与要求的meta_names数目不同
+    入参
+        store : 与HDFStore的连接
+        df_list_need_exploration : list 记录需要被exploration的dataframe
+        df_list_not_exploration : list 记录不需要被exploration的dataframe
+    """
+    for df_name in store.keys():
+        if df_name.endswith(DATA_SUFF) and isinstance(store.get(df_name), pd.DataFrame):
+            df = store.get(df_name)
+            df_name = extract_dataframe_name(df_name, '/', DATA_SUFF)
+            # 准则1
+            if if_dataframe_md5_diff(df_name+DATA_SUFF, df):
+                df_list_need_exploration.append([df_name, df])
+            # 准则2 准则3
+            elif if_dataframe_meta_not_match(store, df_name, df):
+                df_list_need_exploration.append([df_name, df])
+            # 准则4
+            elif len(store.get(HDF5_PREF+df_name+META_SUFF).columns)!=len(meta_names):
+                df_list_need_exploration.append([df_name, df])
+            else:
+                df_list_not_exploration.append([df_name, df])
+
+def if_dataframe_meta_not_match(store, df_name, df):
+    """
+    功能
+        分析dataframe与对应的meata data是否匹配
+        作为判断dataframe是否需要exploration的依据
+    入参
+        store : 与HDFStore的连接
+        df_name : dataframe的裸名
+        df : dataframe本身
+    """
+    # 1.没有对应的meta表
+    if HDF5_PREF+df_name+META_SUFF not in store.keys():
+        return True
+    # 2.meta表中的columns数与dataframe的column不同
+    elif len(df.columns)!=len(store.get(df_name+META_SUFF).index):
+        return True
+    else:
+        return False
 
 # cch包可识别的数据类型
 avaiable_dtypes = ['character', 'numeric', 'factor_s', 'empty', 'binary', 'datetime', 'factor_m']
+# meta信息表对应的列名的显示信息
+meta_show_name_map = {'col_name':u'字段名称',
+                      'col_datatype':u'字段类型',
+                      'col_factornum':u'区分度',
+                      'distinct_ratio':u'区分度',
+                      'value_range':u'取值范围',
+                      'missing_value_percentage':u'缺失值比例',
+                      'distribution_figs':u'详细信息'}
+meta_from_peek = ['col_name', 'col_datatype', 'col_factornum']
+meta_names = meta_from_peek + ['value_range', 'missing_value_percentage','distribution_figs']
 
 def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
     """
     说明
         将peek返回的df进行加工处理,
         将dataframe列的meta信息存下来
-        将列的分布图的信息存在本地文件夹fig_dir中
+        将列的分布图的图像存在本地文件夹fig_dir中
+        格式要求:
+            1.保证col_name放在第一个column
+            2.保证fig信息要放在最后一个column
     入参
         df_peek : cch包对df进行数据探索后的信息
         df_ori : 原始df
         df_name : df的名称 
     出参
-        (meta_list, 2Dtable)
-        meta_list : 表格每个字段对应显示名称 
-        2Dtable : 各个表格的信息  
+        (col_names, dataframe)
+        col_names : 表格每个字段对应显示名称 
+        dataframe : 各个表格的信息  
     """
-    ret = []
-    meta_list_write_to_local = []
-    meta_from_peek = ['col_name', 'col_datatype', 'col_factornum']
-    meta_list = meta_from_peek + ['value_range', 'missing_value_percentage']
-    meta_show_name_map = {'col_name':u'字段名称',
-                          'col_datatype':u'字段类型',
-                          'col_factornum':u'区分度',
-                          'distinct_ratio':u'区分度',
-                          'value_range':u'取值范围',
-                          'missing_value_percentage':u'缺失值比例'}
+    meta_array = []
+    col_names = []
+    # 构造需要写入dataframe对应的meta表的每一列的信息
     for col_name in df_peek.columns:
-        # 需要从peek中抽取的列信息
+        # 0.直接从peek返回信息中抽取的内容
         tmp = []
         for meta in meta_from_peek:
+            # peek中返回的'col_factornum'的名称是写死的不能修改 根据该列的信息可以计算出distinct_ratio的数据
+            # 在这里先做蹩脚的转换
             if meta=='col_factornum':
                 distinct_ratio = int(df_peek[col_name][meta]) / (float(len(df_ori.index))+1)
                 tmp.append(round(distinct_ratio,2))
             else:
                 tmp.append(df_peek[col_name][meta])
-        # tmp = [ df_peek[col_name][meta] for meta in meta_from_peek ]
-        # 列变量取值范围
+        # 1.列变量取值范围
         dtype = df_peek[col_name]['col_datatype']
         if dtype not in avaiable_dtypes:
             tmp.append(u'uncertain data type')
@@ -274,35 +340,26 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
             tmp.append( 'empty' )
         else:
             tmp.append(u'uncertain data type')
-        # 缺失值比例
+        # 2.缺失值比例
         tmp.append( str(df_ori[col_name].isnull().sum()*100.0 / len(df_ori[col_name]))+"%")
-        # 记录到meta list里面
-        meta_list_write_to_local.append(deepcopy(tmp))
-        # 生成fig信息
-        #   这一部分要保证放在tmp的最后 因为不属于每一行共有的列的值
-        #   在使用前加一个保护判断, 保证每行共有的列meta_list都处理完毕
-        if len(tmp)==len(meta_list):
-            draw_fig_for_df_oneCol(df_ori, df_name, col_name, dtype, tmp)
-        ret.append(tmp)
-    # assert len(meta_list)==len(ret[0]), "meta data table columns not match"
+        # 3.列变量分布信息
+        tmp.append(create_distribution_fig(df_ori, df_name, col_name, dtype))
+        meta_array.append(tmp)
     try:
-        # 将(不包含分布图)信息存入dataframe中
-        # 存放meta的dataframe中的col_name变成distinct_ratio
-        meta_list = [ m if m!='col_factornum' else 'distinct_ratio' for m in meta_list ]
-        df_col_meta = pd.DataFrame(columns=meta_list)
-        for i in range(len(meta_list_write_to_local)):
-            df_col_meta.loc[i] = meta_list_write_to_local[i]
-        # 将该df列的信息存入HDF5中
+        # 重写meta信息 全表
+        # 存放meta的dataframe中的col_name变成distinct_ratio 原因还是peek中蹩脚的'col_factornum'的列名
+        col_names = [ m if m!='col_factornum' else 'distinct_ratio' for m in meta_names ]
+        # 生成dataframe存放meta信息
+        df_col_meta = pd.DataFrame(columns=col_names)
+        for i in range(len(meta_array)): df_col_meta.loc[i] = meta_array[i]
+        # 将meta信息存入HDF5中
+        # 由于这里需要把meta信息存入HDF5 有fig对应的值就有对应的列名 因此要修改前端显示的模板
         with pd.HDFStore(HDF5_path) as store:
             store.put(df_name+META_SUFF, df_col_meta)
     except Exception,e:
         print e
         st(context=21)
-    finally:
-        pass
-    # 更新列字段显示名称
-    meta_list = [ meta_show_name_map.get(meta, u'未设置显示名称') for meta in meta_list ]
-    return (meta_list, ret)
+    return (col_names, df_col_meta)
 
 # 定义'df列类型'到'分布图'的映射关系: 一个数据类型可以对应多个分布图
 map_dtype_figtype = {'character' : [],
@@ -315,7 +372,7 @@ map_dtype_figtype = {'character' : [],
 # 针对枚举类型数据
 need_value_count_figtype = ['pie', 'bar']
 
-def draw_fig_for_df_oneCol(df, df_name, col_name, dtype, tmp):
+def create_distribution_fig(df, df_name, col_name, dtype):
     """
     说明
         根据df某一列的数据类型生成分布图
@@ -324,23 +381,26 @@ def draw_fig_for_df_oneCol(df, df_name, col_name, dtype, tmp):
         df_name : 代表df名称的字符
         col_name : df中某一列的信息
         dtype : 该列的数据类型
-        tmp :  [ (fig类型, fig地址)... ] 存放该列信息绑定的fig信息
+    出参
+        将该列对应的distribution fig信息拼接成字符串
+            figname1#figname2...
+        如果没有信息则返回为空
     """
+    ret = []
     for figtype in map_dtype_figtype.get(dtype):
         try:
-            # ax = getattr(df[col_name].plot,figtype)()
             ax = df[col_name].plot(kind=figtype) if figtype not in need_value_count_figtype \
                     else df[col_name].value_counts().plot(kind=figtype)
             fig = ax.get_figure()
             fig_name = str(df_name)+'_'+str(col_name)+'_'+str(figtype)+'.png'
             fig.savefig(fig_dir+fig_name)
             print fig_name
-            tmp.append((figtype, fig_name))
+            ret.append(fig_name)
             fig.clf()
         except Exception,e:
             st(context=21)
-        finally:
-            pass
+    return "#".join(ret)
+
 
 ## 基础过滤涉及到的配置变量
 # 是否处理该列的checkbox的判断标志
@@ -357,6 +417,7 @@ def dc_data_cleansing():
     if request.method=='POST':
         try:
             # 遍历每一条需要更新的列信息 根据每一列的checkbox的值判断是否过滤掉这一列
+            df_name_list = []
             for rf_k in request.form.keys():
                 # 根据选中的列过滤数据
                 if request.form.getlist(rf_k)[0] == app.config['CHECKED']:
@@ -364,6 +425,12 @@ def dc_data_cleansing():
                     df_name = rf_k.split(DF_COL_SPLIT)[0]
                     col_name = rf_k.split(DF_COL_SPLIT)[1]
                     deal_base_column_filtering(store, df_name, col_name, 'DEL')
+                    df_name_list.append(df_name)
+            # 由于只是删除某列 不需要重新生成dataframe的meta信息 只需要重新计算md5并更新即可
+            df_md5 = {}
+            for df_name in list(set(df_name_list)):
+                df_md5[df_name+DATA_SUFF] = calculate_dataframe_md5(store[df_name+DATA_SUFF])
+                merge_dataframe_md5(df_md5)
             # 更新显示meta信息
             paras['meta_list'] = get_df_meta_info(store) 
             store.close()
@@ -409,7 +476,12 @@ def dc_pro_data_cleansing():
         # 更新HDFStore中的数据(DATA数据 META数据) 默认DATA数据和META数据都存在
         deal_pro_column_filtering(store, df_name, remained_col_names, 'REMAIN')
         # 读取出更新后的values 
-        meta_table = store.get(hdf5_pref+df_name+meta_suff)
+        meta_table = store.get(HDF5_PREF+df_name+META_SUFF)
+        # 由于是过滤操作 只需要更新dataframe的md5即可
+        df_md5 = {}
+        df_md5[df_name+DATA_SUFF] = calculate_dataframe_md5(store[df_name+DATA_SUFF])
+        merge_dataframe_md5(df_md5)
+        # 把meta_table推到前端页面
         paras['meta_table'] = meta_table
         store.close()
         return render_template('dc_pro_data_cleansing.html', **paras)
@@ -500,7 +572,7 @@ def deal_base_column_filtering(store, df_name, col_name, action):
     assert col_name in store[df_name+DATA_SUFF].columns, \
             "column %s not in dataframe %s"%(col_name, df_name+DATA_SUFF)
     # 删除实际列数据
-    store[df_name+DATA_SUFF] = store[df_name+DATA_SUFF].drop(col_name,1)
+    store[df_name+DATA_SUFF] = store[df_name+DATA_SUFF].drop(col_name, 1)
     # 删除列的meta信息 
     store[df_name+META_SUFF] = store[df_name+META_SUFF][store[df_name+META_SUFF]['col_name']!=col_name]
 
@@ -571,7 +643,6 @@ def deal_feature_engineering(store, df_name, feature_list, action, derive_prefix
     df = pd.concat([df]+derived, axis=1, join_axes=[df.index])
     # 更新data信息
     store[df_name+DATA_SUFF] = df
-    # 生成衍生信息后再调用一次data_exploration生成meta信息
 
 if __name__ == '__main__':
     app.run()
