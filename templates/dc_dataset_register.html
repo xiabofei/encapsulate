@@ -88,6 +88,7 @@
         </div>
         <div id="collapse{{ df[0] }}" class="panel-collapse collapse">
             <div class="panel-body" style="overflow-y: scroll;">
+                <p><a id="delete{{ df[0] }}" class="btn btn-info active" role="button">删除</a></p>
                 {{ df[1].head(n=df_nrow).to_html()|safe }}
             </div>
         </div>
@@ -96,3 +97,27 @@
 </div>
 {%- endmacro %}
 
+{% block scripts  %}
+{{ super() }}
+<script src={{ url_for('static', filename='jquery.js') }}></script>
+<script type=text/javascript>$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};</script>
+<script type=text/javascript>
+$(function(){
+        $("a[id^='delete']").click(function()
+            {
+            var df_name_type = $(this).attr("id").replace('delete','');
+            $.ajax(
+                {
+                url: $SCRIPT_ROOT+'{{ url_for('delete_dataframe') }}',
+                type: 'get',
+                data: { 'df_name_type':df_name_type},
+                dataType: 'html',
+                success: function(response)
+                    {
+                        location.reload(response);
+                    }
+                });
+            });
+});
+</script>
+{% endblock %}

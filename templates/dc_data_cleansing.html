@@ -5,7 +5,7 @@
 
 {% block page_content %}
 <div class="page-header">
-    <a><h3>基础筛选</h4></a>
+    <a><h3>基础过滤</h4></a>
     <li><h5>列过滤 -> 分别展现各列数据的meta信息,支持删除选中的列</h5></li>
     <li><h5>关联操作 -> 同步更新科研数据的data信息与meta信息</h5></li> </div>
 <div id="meta_info_base">
@@ -55,6 +55,8 @@
                     <div class="form-group col-xs-4">
                         <a id="propost{{ meta[0] }}" class="btn btn-info active" role="button">筛选</a>
                         </br>
+                        <label>new_dataframe_name</label>
+                        <input type="text" class="form-control" name="new_dataframe_name" value="df_derived_">
                         <label>data_type</label>
                         <select class="form-control" name="data_type">
                             <option>character</option>
@@ -136,6 +138,7 @@ $(function(){
                 url: $SCRIPT_ROOT+'{{ url_for('dc_pro_data_cleansing') }}',
                 type: 'get',
                 data: { 'df_name':df_name, 
+                        'new_dataframe_name':$(this).siblings("[name='new_dataframe_name']").attr("value"),
                         'data_type':$(this).siblings("[name='data_type']").attr("value"),
                         <!--'data_type':get_selected_df_names(),-->
                         'col_name_pattern':$(this).siblings("[name='col_name_pattern']").attr("value"),

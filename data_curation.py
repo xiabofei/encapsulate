@@ -118,6 +118,31 @@ def dc_dataset_register():
             return render_template('dc_dataset_register.html', **paras)
     return render_template('dc_dataset_register.html', **paras)
 
+@app.route('/dc-delete-dataframe', methods=['GET'])
+def delete_dataframe():
+    """
+    功能
+        删除dataframe
+        这部分接受ajax的df_name_type参数是带有DATA或META后缀的
+            1) 如果删除的是DATA_SUFF后缀 则同步删除相应的META数据
+            2) 如果删除的是META_SUFF后缀 则不用同步删除相应的DATA数据
+    """
+    try:
+        st(context=21)
+        store = pd.HDFStore(HDF5_path)
+        df_name_type = request.args.get('df_name_type', None)
+        assert HDF5_PREF+df_name_type in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name_type, store.filename)
+        store.remove(HDF5_PREF+df_name_type)
+        if df_name_type.endswith(DATA_SUFF):
+            potential_meta_name = HDF5_PREF+extract_dataframe_name(df_name_type,'',DATA_SUFF)+META_SUFF
+            if potential_meta_name in store.keys():
+                store.remove(potential_meta_name)
+        store.close()
+        return redirect(url_for('dc_dataset_register'))
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
+
 def calculate_dataframe_md5(df):
     """
     功能
@@ -408,7 +433,8 @@ app.config['CHECKED'] = u'on'
 # 记录对列指定操作的解释
 app.config['COL_ACTION'] = { 
                             'DEL' : u'删除掉指定列',
-                            'REMAIN' : u'保留指定列'
+                            'REMAIN' : u'保留指定列',
+                            'CREATE' : u'创建新dataframe'
                             }
 @app.route('/dc-data-cleansing', methods=['GET', 'POST'])
 def dc_data_cleansing():
@@ -453,7 +479,8 @@ col_filter_condition_paras = {
 @app.route('/dc-pro-data-cleansing', methods=['GET'])
 def dc_pro_data_cleansing():
     """
-    处理高级列过滤
+    功能
+        处理高级列过滤
     """
     paras = {}
     try:
@@ -463,6 +490,7 @@ def dc_pro_data_cleansing():
         assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
             "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
         # 接受ajax传回的传入select_columns_by_condition参数
+        # 通过字典col_filter_condition_paras来控制截取需要从ajax截取的参数
         received_condition = {}
         for k in col_filter_condition_paras.keys():
             if request.args.get(k)!='':
@@ -474,15 +502,13 @@ def dc_pro_data_cleansing():
         ix.tag_meta_auto(df)
         remained_col_names = ix.select_columns_by_condition(df,**received_condition)
         # 更新HDFStore中的数据(DATA数据 META数据) 默认DATA数据和META数据都存在
-        deal_pro_column_filtering(store, df_name, remained_col_names, 'REMAIN')
-        # 读取出更新后的values 
-        meta_table = store.get(HDF5_PREF+df_name+META_SUFF)
-        # 由于是过滤操作 只需要更新dataframe的md5即可
-        df_md5 = {}
-        df_md5[df_name+DATA_SUFF] = calculate_dataframe_md5(store[df_name+DATA_SUFF])
-        merge_dataframe_md5(df_md5)
-        # 把meta_table推到前端页面
-        paras['meta_table'] = meta_table
+        # 1) 如果是'CREATE'模式 则生成新dataframe, 并传入新dataframe的name
+        # 2) 如果是'REMAIN'模式 则更新原有dataframe并保留符合条件的列
+        if request.args.get('new_dataframe_name','') != '':
+                paras['meta_table'] = deal_pro_column_filtering(store, df_name, \
+                        remained_col_names, 'CREATE', request.args.get('new_dataframe_name'))
+        else:
+            paras['meta_table'] = deal_pro_column_filtering(store, df_name, remained_col_names, 'REMAIN')
         store.close()
         return render_template('dc_pro_data_cleansing.html', **paras)
     except Exception,e:
@@ -508,27 +534,50 @@ def validate_pro_data_cleansing(received_condition):
         return False
     return False
 
-def deal_pro_column_filtering(store, df_name, remained_col_names, action):
+def deal_pro_column_filtering(store, df_name, col_names, action, new_dataframe_name='df_derived_newname'):
     """
     功能
-        将列过滤的高级结果同步到HDFStore中
+        根据action对高级筛选的结果进行操作
     入参
         store : 与HDF5存储的接口
         df_name : 在HDF5中需要处理的dataframe
         col_name : 需要处理的列名
         action : 需要对列进行的操作
+        new_dataframe_name : 如果是'CREATE'操作 则传入新生成的dataframe的变量名
+    出参
+        返回meta_table 用于填充页面显示的内容
     """
     assert action in app.config['COL_ACTION'].keys(), \
             "columns filtering action not in app.config['COL_ACTION']"
     assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
             "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
-    for col_name in remained_col_names:
+    for col_name in col_names:
         assert col_name in store[df_name+DATA_SUFF].columns, \
                 "column %s not in dataframe %s"%(col_name, df_name+DATA_SUFF)
-    # 更新HDFStore中的数据
-    store[df_name+DATA_SUFF] = store[df_name+DATA_SUFF][remained_col_names]
-    # 删除列的meta信息 这里需要明确处理的对象是dataframe
-    store[df_name+META_SUFF] = store[df_name+META_SUFF].loc[store[df_name+META_SUFF]['col_name'].isin(remained_col_names)]
+    df_md5 = {}
+    if action=='REMAIN':
+        # 更新HDFStore中的数据
+        store[df_name+DATA_SUFF] = store[df_name+DATA_SUFF][col_names]
+        # 删除列的meta信息 这里需要明确处理的对象是dataframe
+        store[df_name+META_SUFF] = store[df_name+META_SUFF].loc[store[df_name+META_SUFF]['col_name'].isin(col_names)]
+        # 由于没有生成新的列 只需要更新dataframe的md5即可
+        df_md5[df_name+DATA_SUFF] = calculate_dataframe_md5(store[df_name+DATA_SUFF])
+        merge_dataframe_md5(df_md5)
+        # 把meta_table推到前端页面
+        return store.get(HDF5_PREF+df_name+META_SUFF)
+    elif action=='CREATE':
+        # 如果采用简易的策略 : 直接复制meta 时间上优化了 但是图片这个问题相当于共享了图片的线下地址
+        # 如果采用复杂的策略 : 则避免了这种问题 把meta的生成工作都放在了统一的部分执行
+        # 选定采用复杂策略
+        # 抽出data列
+        new_df_data = store[df_name+DATA_SUFF][col_names]
+        # 抽出meta列
+        remain_meta = store[df_name+META_SUFF].loc[store[df_name+META_SUFF]['col_name'].isin(col_names)]
+        # 只存data
+        store.put(new_dataframe_name+DATA_SUFF, new_df_data)
+        return remain_meta 
+    else:
+        raise ValueError("action value %s not validated",action)
 
 def get_df_meta_info(store, col_datatype='ALL'):
     """
