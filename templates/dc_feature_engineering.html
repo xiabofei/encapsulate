@@ -6,15 +6,42 @@
 {% block page_content %}
 <div id="pageheader" class="page-header">
     <a id="feature">
-        <h3>特征转换</h4>
+        <h3>特征类型转换</h3>
     </a>
-    <li><h5>日期类型特征数值化处理</h5></li>
-    <li><h5>枚举类型变量的特征打散</h5></li>
+    <li><h5>根据实际数据要求 手动修改某个特征的数据类型</h5></li>
 </div>
-{% if meta_list %}
+{% if meta_list_col_type_update %}
 <div id="meta_info_pro">
     <div class="panel-group" id="accordion">
-        {% for meta in meta_list %}
+        {% for meta in meta_list_col_type_update %}
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                <h4 class="panel-title text-left">
+                    <a data-toggle="collapse" href="#collapseupdate{{ meta[0] }}">{{ meta[0] }}</a>
+                </h4>
+            </div>
+            <div id="collapseupdate{{ meta[0] }}" class="panel-collapse collapse">
+                <div class="panel-body" style="overflow-y: scroll;">
+                    <a id="coltypeupdate{{ meta[0] }}" class="btn btn-info active" role="button">转换</a>
+                    </br>
+                    {{ show_df_as_table(meta[1],meta[0],"if_checkbox","if_col_type_update") }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+<div id="pageheader" class="page-header">
+    <a id="feature">
+        <h3>factor特征打散转换</h3>
+    </a>
+    <li><h5>将factor类型变量的特征打散</h5></li>
+</div>
+{% if meta_list_factor_s %}
+<div id="meta_info_pro">
+    <div class="panel-group" id="accordion">
+        {% for meta in meta_list_factor_s %}
         <div class="panel panel-info">
             <div class="panel-heading">
                 <h4 class="panel-title text-left">
@@ -23,16 +50,14 @@
             </div>
             <div id="collapsepro{{ meta[0] }}" class="panel-collapse collapse">
                 <div class="panel-body" style="overflow-y: scroll;">
-                    <!--<div class="form-group col-xs-4">-->
-                        <a id="featureengineer{{ meta[0] }}" class="btn btn-info active" role="button">转换</a>
-                        </br>
-                        <label>derive_prefix</label>
-                        <input type="text" class="form-control" style="width:50%" name="derive_prefix" value="drv_f_">
-                        </br>
-                    <!--</div>-->
-                    <!--<div id="feature_factor">-->
-                        {{ show_df_as_table(meta[1],meta[0],"if_checkbox") }}
-                    <!--</div>-->
+                    <a id="featureengineer{{ meta[0] }}" class="btn btn-info active" role="button">转换</a>
+                    </br>
+                    <label>derive_prefix</label>
+                    <input type="text" class="form-control" style="width:50%" name="derive_prefix" value="drv_f_">
+                    <label>new_dataframe_name</label>
+                    <input type="text" class="form-control" style="width:50%" name="new_dataframe_name" value="">
+                    </br>
+                    {{ show_df_as_table(meta[1],meta[0],"if_checkbox") }}
                 </div>
             </div>
         </div>
@@ -40,9 +65,198 @@
     </div>
 </div>
 {% endif %}
+<div id="pageheader" class="page-header">
+    <a id="feature">
+        <h3>datetime特征转换</h3>
+    </a>
+    <li><h5>将datetime类型数值化处理</h5></li>
+</div>
+{% if meta_list_datetime %}
+<div id="meta_datetime">
+    <div class="panel-group" id="accordion">
+        {% for meta in meta_list_datetime %}
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                <h4 class="panel-title text-left">
+                    <a data-toggle="collapse" href="#collapsedatetime{{ meta[0] }}">{{ meta[0] }}</a>
+                </h4>
+            </div>
+            <div id="collapsedatetime{{ meta[0] }}" class="panel-collapse collapse">
+                <div class="panel-body" style="overflow-y: scroll;">
+                    <div class="col-md-12">
+                        <a id="datetime{{ meta[0] }}" class="btn btn-info active" role="button">转换</a>
+                        <br>
+                        <label>new_dataframe_name</label>
+                        <input type="text" class="form-control" style="width:50%" id="datetime_new_dataframe_name" value=""/>
+                        <label>value_as_base</label>
+                        <input type="text" class="form-control" style="width:50%" id="value_as_base" value=""/>
+                        <label>derive_prefix</label>
+                        <input type="text" class="form-control" style="width:50%" id="datetime_derive_prefix" value=""/>
+                        {{ show_df_as_table(meta[1],meta[0],"if_checkbox") }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+<div id="pageheader" class="page-header">
+    <a id="feature">
+        <h3>one to one特征转换</h3>
+    </a>
+    <li><h5>利用lambda表达式对单列特征进行转换</h5></li>
+</div>
+{% if meta_list_one_to_one %}
+<div id="meta_datetime">
+    <div class="panel-group" id="accordion">
+        {% for meta in meta_list_one_to_one %}
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                <h4 class="panel-title text-left">
+                    <a data-toggle="collapse" href="#collapseonetoone{{ meta[0] }}">{{ meta[0] }}</a>
+                </h4>
+            </div>
+            <div id="collapseonetoone{{ meta[0] }}" class="panel-collapse collapse">
+                <div class="panel-body" style="overflow-y: scroll;">
+                    <div class="col-md-8">
+                        <a id="onetoone{{ meta[0] }}" class="btn btn-info active" role="button">转换</a>
+                        <br>
+                        <label>new_dataframe_name</label>
+                        <input type="text" class="form-control" style="width:50%" id="new_dataframe_name" value=""/>
+                        <label>input_col</label>
+                        <input type="text" class="form-control" style="width:50%" id="input_col" value=""/>
+                        <label>lambda_function_type</label>
+                        <select class="form-control" id="lambda_function_type">
+                            <option>isnull</option>
+                        </select> 
+                        <label>output_col</label>
+                        <input type="text" class="form-control" style="width:50%" id="output_col" value=""/>
+                        <br>
+                        {{ show_df_as_table(meta[1],meta[0]) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+<div id="pageheader" class="page-header">
+    <a id="feature">
+        <h3>特征数据扩充</h3>
+    </a>
+    <li><h5>将每个样本的多维度特征进行join操作</h5></li>
+</div>
+{% if concat_dataframe %}
+<div id="concat_dataframe">
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h4>输入参数</h4>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="form-group col-md-12">
+                    <div class="col-md-12">
+                        <a id="concat_dataframe" class="btn btn-info active" role="button">扩充</a>
+                    </div>
+                    <div class="col-md-8">
+                        <label>left dataframe</label>
+                        <select class="form-control" name="dataframe_concat_left">
+                            {% for meta in concat_dataframe %}
+                            <option>{{ meta[0] }}</option>
+                            {% endfor %}
+                        </select> 
+                        <label>right dataframe</label>
+                        <select class="form-control" name="dataframe_concat_right">
+                            {% for meta in concat_dataframe %}
+                            <option>{{ meta[0] }}</option>
+                            {% endfor %}
+                        </select> 
+                    </div>
+                    <div class="col-md-8">
+                        <label>axis</label>
+                        <select class="form-control" name="axis">
+                            <option>0</option>
+                            <option>1</option>
+                        </select> 
+                        <label>join_axes</label>
+                        <input type="text" class="form-control" name="join_axes" value="">
+                        <label>new_dataframe_name</label>
+                        <input type="text" class="form-control" name="concat_new_dataframe_name" value="">
+                        <label>how</label>
+                        <select class="form-control" name="how">
+                            <option></option>
+                            <option>left</option>
+                            <option>right</option>
+                            <option>inner</option>
+                            <option>outer</option>
+                        </select> 
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="panel panel-default">
+                        <div class="panel-heading"><h5>left dataframe detail</h5></div>
+                        <div class="panel-body" style="overflow-y: scroll;">
+                            <div class="panel panel-default">
+                                <div class="panel-heading"><h5>样本维度</h5></div>
+                                <div class="panel-body" style="overflow-y: scroll;">
+                                    <p id="dataframe_shape_left"></p>
+                                </div>
+                            </div>
+                            <div class="panel panel-default">
+                                <div class="panel-heading"><h5>样本预览</h5></div>
+                                <div class="panel-body" style="overflow-y: scroll;">
+                                    <div id="dataframe_data_left">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="panel panel-default">
+                                <div class="panel-heading"><h5>特征信息</h5></div>
+                                <div class="panel-body" style="overflow-y: scroll;">
+                                    <div id="dataframe_meta_left">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="panel panel-default">
+                        <div class="panel-heading"><h5>right dataframe detail</h5></div>
+                        <div class="panel-body" style="overflow-y: scroll;">
+                            <div class="panel panel-default">
+                                <div class="panel-heading"><h5>样本维度</h5></div>
+                                <div class="panel-body" style="overflow-y: scroll;">
+                                    <p id="dataframe_shape_right"></p>
+                                </div>
+                            </div>
+                            <div class="panel panel-default">
+                                <div class="panel-heading"><h5>样本预览</h5></div>
+                                <div class="panel-body" style="overflow-y: scroll;">
+                                    <div id="dataframe_data_right">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="panel panel-default">
+                                <div class="panel-heading"><h5>特征信息</h5></div>
+                                <div class="panel-body" style="overflow-y: scroll;">
+                                    <div id="dataframe_meta_right">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
-
-{% macro show_df_as_table(df,df_name,if_checkbox) -%}
+{% macro show_df_as_table(df,df_name,if_checkbox,if_col_type_update) -%}
 <!--将dataframe转换为table显示,并根据传入参数控制是否有checkbox-->
 <table class='dataframe' border=1> 
     <thead>
@@ -53,6 +267,9 @@
             {% for col_name in df.columns %}
             <th>{{ col_name }}</th>
             {% endfor %}
+            {% if if_col_type_update is defined %}
+            <th>目标类型</th>
+            {% endif %}
         </tr>
     </thead>
     <tbody>
@@ -64,6 +281,19 @@
         {% for c in range(df.iloc[r]|length) %}
         <td>{{ df.iloc[r][c] }}</td> 
         {% endfor %}
+        {% if if_col_type_update is defined %}
+        <td>
+            <select name="col_type">
+                <option>character</option>
+                <option>numeric</option>
+                <option>binary</option>
+                <option>datetime</option>
+                <option>factor_m</option>
+                <option>factor_s</option>
+                <option>empty</option>
+            </select> 
+        </td>
+        {% endif %}
     </tr>
     {% endfor %}
     </tbody>
@@ -75,12 +305,11 @@
 <script src={{ url_for('static', filename='jquery.js') }}></script>
 <script type=text/javascript>$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};</script>
 <script type=text/javascript>
+<!--特征打散-->
 $(function(){
         $("a[id^='featureengineer']").click(function()
             {
-            <!--获取dataframe的内容-->
             var df_name = $(this).attr("id").replace('featureengineer','');
-            <!--获得该dataframe下选中的checkbox-->
             var checked_feature = [];
             $("input:checked[name^="+df_name+"]").each(function(){
                 checked_feature.push($(this).attr("name"));
@@ -91,18 +320,164 @@ $(function(){
                 type: 'get',
                 traditional:true,
                 data: { 'df_name':df_name, 
-                        'derive_prefix':$(this).siblings("[name='derive_prefix']").attr("value"),
-                        <!--'checked_feature':JSON.stringify(checked_feature)-->
-                        'checked_feature':checked_feature
-                        },
-                dataType: 'html',
-                success: function(response)
-                    {
-                        <!--alert("Success");-->
-                        <!--$("div#feature_factor").html(response);-->
-                    }
-                });
+                'derive_prefix':$(this).siblings("[name='derive_prefix']").attr("value"),
+                'new_dataframe_name':$(this).siblings("[name='new_dataframe_name']'").attr("value"),
+                'checked_feature':checked_feature
+                },
+            dataType: 'html',
+            success: function(response)
+            {
+            <!--alert("Success");-->
+            <!--$("div#feature_factor").html(response);-->
+            }
             });
+        });
+});
+$(function(){
+        $("a[id^='coltypeupdate']").click(function()
+            {
+            var df_name = $(this).attr("id").replace('coltypeupdate','');
+            var colname_coltype = [];
+            $("input:checked[name^="+df_name+"]").each(function(){
+                <!--获取与input checkbox同一行中的select中选定的类型-->
+                var col_name = $(this).attr("name");
+                var col_type = $(this).parent().parent().find('option:selected').text();
+                colname_coltype.push([col_name+'.'+col_type]);
+                });
+            $.ajax(
+                {
+                url: $SCRIPT_ROOT+'{{ url_for('dc_feature_engineering_coltype_update') }}',
+                type: 'get',
+                traditional:true,
+                data: { 'df_name':df_name, 
+                'colname_coltype':colname_coltype
+                },
+            dataType: 'html',
+            success: function(response)
+            {
+            location.reload(response);
+            }
+        });
+    });
+});
+<!--日期类型type_casting-->
+$(function(){
+        $("a[id^='datetime']").click(function()
+            {
+            var df_name = $(this).attr("id").replace('datetime','');
+            var new_dataframe_name = $(this).siblings("input#datetime_new_dataframe_name").attr("value");
+            var value_as_base = $(this).siblings("input#value_as_base").attr("value");
+            var derive_prefix = $(this).siblings("input#datetime_derive_prefix").attr("value");
+            var col_names = [];
+            $("input:checked[name^="+df_name+"]").each(function(){
+                <!--获取与input checkbox同一行中的select中选定的类型-->
+                var col_name = $(this).attr("name");
+                col_names.push(col_name);
+                });
+            $.ajax(
+                {
+                url: $SCRIPT_ROOT+'{{ url_for('dc_feature_engineering_datetime') }}',
+                type: 'get',
+                traditional:true,
+                data: { 'df_name' : df_name, 
+                        'new_dataframe_name' : new_dataframe_name,
+                        'value_as_base' : value_as_base,
+                        'derive_prefix' : derive_prefix,
+                        'col_names' : col_names
+                },
+            datatype: 'json',
+            success: function(response)
+            {
+                alert(response.impact_columns);
+            }
+        });
+    });
+});
+<!--one to one 类型-->
+$(function(){
+        $("a[id^='onetoone']").click(function()
+            {
+            var df_name = $(this).attr("id").replace('onetoone','');
+            var new_dataframe_name = $(this).siblings("input#new_dataframe_name").attr("value");
+            var input_col = $(this).siblings("input#input_col").attr("value");
+            var lambda_function_type = $(this).siblings("select#lambda_function_type").find("option:selected").text();
+            var output_col = $(this).siblings("input#output_col").attr("value");
+            var col_names = [];
+            $("input:checked[name^="+df_name+"]").each(function(){
+                <!--获取与input checkbox同一行中的select中选定的类型-->
+                var col_name = $(this).attr("name");
+                col_names.push(col_name);
+                });
+            $.ajax(
+                {
+                url: $SCRIPT_ROOT+'{{ url_for('dc_feature_engineering_one_to_one') }}',
+                type: 'get',
+                traditional:true,
+                data: { 'df_name' : df_name, 
+                        'new_dataframe_name' : new_dataframe_name,
+                        'input_col' : input_col,
+                        'lambda_function_type' : lambda_function_type,
+                        'output_col' : output_col, 
+                        'col_names' : col_names
+                },
+            datatype: 'html',
+            success: function(response)
+            {
+                location.reload(response);
+            }
+        });
+    });
+});
+<!--动态显示选择需要join的dataframe信息-->
+$(function(){
+        $("select[name^='dataframe_concat_']").change(function()
+            {
+            var left_or_right = $(this).attr("name").replace('dataframe_concat_','');
+            var df_name = $(this).find("option:selected").text(); 
+            $.ajax(
+                {
+                url: $SCRIPT_ROOT+'{{ url_for('get_meta_dataframe') }}',
+                type: 'get',
+                data: { 'df_name':df_name},
+                dataType: 'json',
+                success: function(response)
+                {
+                    $("p#dataframe_shape_"+left_or_right).text(response.shape);
+                    $("div#dataframe_data_"+left_or_right).html(response.df_data);
+                    $("div#dataframe_meta_"+left_or_right).html(response.df_meta);
+                }
+            });
+        });
+});
+<!--传入参数并执行dataframe的concat的操作-->
+$(function(){
+        $("a[id^='concat_dataframe']").click(function()
+            {
+            var left_df_name = $("select[name='dataframe_concat_left']").find('option:selected').text();
+            var right_df_name = $("select[name='dataframe_concat_right']").find('option:selected').text();
+            var axis = $("select[name='axis']").find('option:selected').text();
+            var join_axes = $("input[name='join_axes']").attr("value");
+            var how = $("select[name='how']").find('option:selected').text();
+            var new_dataframe_name = $("input[name='concat_new_dataframe_name']").attr("value");
+            $.ajax(
+                {
+                url: $SCRIPT_ROOT+'{{ url_for('dc_concat_dataframe') }}',
+                type: 'get',
+                traditional:true,
+                data: { 'left_df_name':left_df_name, 
+                        'right_df_name':right_df_name,
+                        'axis':axis,
+                        'join_axes':join_axes,
+                        'how':how,
+                        'new_dataframe_name':new_dataframe_name
+                    },
+                dataType: 'json',
+                success: function(response)
+                {
+                    alert(response.new_dataframe_name+' is created!')
+                }
+        });
+    });
 });
 </script>
 {% endblock %}

@@ -35,11 +35,11 @@ from flask_moment import Moment
 from copy import copy, deepcopy
 from pprint import pprint
 from ipdb import set_trace as st
-# from time import sleep
 import pylab
 import glob
 import hashlib
 import json
+import urllib2
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
@@ -128,7 +128,6 @@ def delete_dataframe():
             2) 如果删除的是META_SUFF后缀 则不用同步删除相应的DATA数据
     """
     try:
-        st(context=21)
         store = pd.HDFStore(HDF5_path)
         df_name_type = request.args.get('df_name_type', None)
         assert HDF5_PREF+df_name_type in store.keys(), \
@@ -467,6 +466,99 @@ def dc_data_cleansing():
     store.close()
     return render_template('dc_data_cleansing.html', **paras)
 
+@app.route('/dc-filter-row-by-id', methods=['GET'])
+def df_filter_row_by_id():
+    """
+    功能
+        根据A表提供的ID 对B表的ID进行过滤
+    """
+    st(context=21)
+    ret = {}
+    try:
+        # 获取相应数据
+        store = pd.HDFStore(HDF5_path)
+        df_name = request.args.get('origin_samples', None)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+        df_id_name = request.args.get('id_candicate', None)
+        assert HDF5_PREF+df_id_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_id_name+DATA_SUFF, store.filename)
+        new_dataframe_name = request.args.get('new_dataframe_name', None)
+        df = store[df_name+DATA_SUFF]
+        ix.tag_meta_auto(df)
+        tmp1 = store[df_id_name+DATA_SUFF]["DESYNPUF_ID"]
+        def f1(*args):
+            id = args[0]
+            return id in [a for a in tmp1]
+        cnt_rows = ix.select_rows_by_function(df, f1)
+        df = ix.filter_rows(df, cnt_rows)
+        update_df_in_HDFStore_by_name(store, new_dataframe_name, df)
+        # assert df_name!=new_dataframe_name, "df_name and new_dataframe_name cannot be the same"
+        # store.put(new_dataframe_name+DATA_SUFF, df)
+        ret['info'] = 'affects %s number of rows'%(str(sum(cnt_rows)))
+        store.close()
+    except Exception, e:
+        store.close()
+        return render_template('dc_error.html', e_message=e)
+    return json.dumps(ret) 
+
+@app.route('/dc-select-row-by-expr', methods=['GET','POST'])
+def dc_select_row_by_expr():
+    """
+    功能
+        根据表达式过滤行
+    """
+    st(context=21)
+    ret = {}
+    try:
+        store = pd.HDFStore(HDF5_path)
+        # 接受ajax传回参数
+        df_name = request.args.get('df_name', None)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+        new_dataframe_name = request.args.get('new_dataframe_name', None)
+        rval_expr = request.args.get('rval_expr', None)
+        # non_NA_percent = request.args.get('non_NA_percent',None)
+        non_NA_percent = 0
+        # expr_symbol = urllib2.unquote(request.args.get('expr_symbol', None))
+        expr_symbol = '\$' 
+        # 按条件过滤数据 
+        df = store[df_name+DATA_SUFF]
+        ix.tag_meta_auto(df)
+        cnt_rows = ix.select_rows_by_expr(
+                    df, 
+                    expr_symbol=expr_symbol,
+                    non_NA_percent=non_NA_percent,
+                    rval_expr=rval_expr
+                    )
+        df = ix.filter_rows(df, cnt_rows)
+        # 生成新dataframe 
+        update_df_in_HDFStore_by_name(store, new_dataframe_name, df)
+        ret['info'] = 'affects %s number of rows'%(str(sum(cnt_rows)))
+        store.close()
+    except Exception, e:
+        store.close()
+        return render_template('dc_error.html', e_message=e)
+    return json.dumps(ret) 
+        
+        
+def update_df_in_HDFStore_by_name(store, new_dataframe_name, df):
+    """
+    功能
+        向HDFStore中存储新的dataframe时
+            1) 如果HDFStore中原有的dataframe的name相同 则需要更新相应的meta data    
+            2) 将dataframe存入HDFStore中
+    入参
+        store : 与HDFStore的连接
+        new_dataframe_name : 新生成的dataframe的name
+        df : 新生成的dataframe
+    """
+    if HDF5_PREF+new_dataframe_name+DATA_SUFF in store.keys():
+        if HDF5_PREF+new_dataframe_name+META_SUFF in store.keys():
+            store.remove(HDF5_PREF+new_dataframe_name+META_SUFF)
+    store.put(new_dataframe_name+DATA_SUFF, df)
+            
+
 # 后端需要从ajax接收的参数
 col_filter_condition_paras = {
                               'data_type':'str',         # 保留该类型的列数据
@@ -500,6 +592,14 @@ def dc_pro_data_cleansing():
         # 执行过滤模块 返回过滤后剩下的列名
         df = store[df_name+DATA_SUFF]
         ix.tag_meta_auto(df)
+        # A tmp tradeoff method to correct the datatype of all ready explored dataframe 
+        assert HDF5_PREF+df_name+META_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+META_SUFF, store.filename)
+        df_meta = store[HDF5_PREF+df_name+META_SUFF]
+        for i in range(len(df_meta.index)):
+            col_name = df_meta.ix[i]['col_name']
+            col_datatype = df_meta.ix[i]['col_datatype']
+            ix.update_meta(df, [col_name], "col_datatype", col_datatype)
         remained_col_names = ix.select_columns_by_condition(df,**received_condition)
         # 更新HDFStore中的数据(DATA数据 META数据) 默认DATA数据和META数据都存在
         # 1) 如果是'CREATE'模式 则生成新dataframe, 并传入新dataframe的name
@@ -566,7 +666,6 @@ def deal_pro_column_filtering(store, df_name, col_names, action, new_dataframe_n
         # 把meta_table推到前端页面
         return store.get(HDF5_PREF+df_name+META_SUFF)
     elif action=='CREATE':
-        # 如果采用简易的策略 : 直接复制meta 时间上优化了 但是图片这个问题相当于共享了图片的线下地址
         # 如果采用复杂的策略 : 则避免了这种问题 把meta的生成工作都放在了统一的部分执行
         # 选定采用复杂策略
         # 抽出data列
@@ -574,7 +673,8 @@ def deal_pro_column_filtering(store, df_name, col_names, action, new_dataframe_n
         # 抽出meta列
         remain_meta = store[df_name+META_SUFF].loc[store[df_name+META_SUFF]['col_name'].isin(col_names)]
         # 只存data
-        store.put(new_dataframe_name+DATA_SUFF, new_df_data)
+        update_df_in_HDFStore_by_name(store, new_dataframe_name, new_df_data)
+        # store.put(new_dataframe_name+DATA_SUFF, new_df_data)
         return remain_meta 
     else:
         raise ValueError("action value %s not validated",action)
@@ -602,6 +702,28 @@ def get_df_meta_info(store, col_datatype='ALL'):
                 df = df[df['col_datatype']==col_datatype]
                 meta_list.append( (extract_dataframe_name(s_k, '/', META_SUFF), df) )
     return meta_list
+
+
+def remain_col_from_meta_list(meta_list, col_name_list):
+    """
+    功能
+        针对get_df_meta_info返回的meta_list中剔除某些不许要显示的列
+    入参
+        meta_list : get_df_meta_info返回的meta_list
+        col_names : 需要显示的meta中的列名
+    出参
+        ret : [[df_name, df_data],...] 
+    """
+    ret = []
+    for col_name in col_name_list:
+        assert col_name in meta_names, "col_name '%s' not in meta table column "%(col_name)
+    for meta in meta_list:
+        df_name = meta[0]
+        df_data = meta[1][col_name_list]
+        ret.append([df_name, df_data])
+    return ret
+
+
 
 def deal_base_column_filtering(store, df_name, col_name, action):
     """
@@ -631,11 +753,178 @@ def dc_feature_engineering():
     """
     处理特征转换
     """
+    try:
+        paras = {}
+        with pd.HDFStore(HDF5_path) as store:
+            # 对特征处理时需要展现的列的信息
+            col_name_list = ['col_name', 'col_datatype', 'value_range']
+            paras['concat_dataframe'] = remain_col_from_meta_list(\
+                    get_df_meta_info(store, 'ALL'),
+                    col_name_list)
+            paras['meta_list_factor_s'] = remain_col_from_meta_list( \
+                    get_df_meta_info(store, 'factor_s'),
+                    col_name_list)
+            paras['meta_list_col_type_update'] = remain_col_from_meta_list( \
+                    get_df_meta_info(store, 'ALL'),
+                    col_name_list)
+            paras['meta_list_datetime'] = remain_col_from_meta_list(\
+                    get_df_meta_info(store, 'datetime'),
+                    col_name_list)
+            paras['meta_list_one_to_one'] = remain_col_from_meta_list(\
+                    get_df_meta_info(store, 'ALL'),
+                    col_name_list)
+            return render_template('dc_feature_engineering.html', **paras)
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
+
+@app.route('/dc-concat-dataframe', methods=['GET'])
+def dc_concat_dataframe():
+    """
+    功能
+        接收ajax参数 对两个dataframe执行join/merge/concat等操作
+        (第一版先满足打通基本流程 后面的版本再处理复杂情况)
+    入参
+        left_df_name : concat操作中的left dataframe名
+        right_df_name : concat操作中的right dataframe名
+        axis : 0代表按行合并, 1代表按列合并
+        join_axes : 作为concat操作中的key列
+        new_dataframe_name : 新生成的dataframe的名
+    出参
+        返回新生成的dataframe信息的json串
+    """
+    st(context=21)
+    ret = {}
+    with pd.HDFStore(HDF5_path) as store:
+        left_df_name = request.args.get('left_df_name', None)
+        assert HDF5_PREF+left_df_name+DATA_SUFF in store.keys(), \
+                "dataframe %s not in store %s"%(HDF5_PREF+left_df_name+DATA_SUFF, store.filename)
+        right_df_name = request.args.get('right_df_name', None)
+        assert HDF5_PREF+right_df_name+DATA_SUFF in store.keys(), \
+                "dataframe %s not in store %s"%(HDF5_PREF+right_df_name+DATA_SUFF, store.filename)
+        axis = int(request.args.get('axis', None))
+        join_axes = request.args.get('join_axes', None)
+        how = request.args.get('how',None)
+        new_dataframe_name = request.args.get('new_dataframe_name', None)
+        left = store[HDF5_PREF+left_df_name+DATA_SUFF]
+        right = store[HDF5_PREF+right_df_name+DATA_SUFF]
+        # 临时将concat join merge合并在一起实现
+        # 第二版将这三种情况分别实现
+        if axis==1:
+            new_dataframe = pd.concat([left,right], axis=axis, join_axes=[left.index])
+        else:
+            if join_axes=='':
+                new_dataframe = pd.merge(left, right, left_index=True, right_index=True,suffixes=['_l', '_r'] )
+            else:
+                if how=='':
+                    new_dataframe = ix.df_join(left, right, [join_axes])
+                else:
+                    new_dataframe = ix.df_join(left, right, [join_axes], how=how)
+        update_df_in_HDFStore_by_name(store, new_dataframe_name, new_dataframe)
+        ret['new_dataframe_name'] = new_dataframe_name
+    return json.dumps(ret) 
+
+@app.route('/get-meta-dataframe', methods=['GET'])
+def get_meta_dataframe():
+    """
+    功能
+        接收ajax推送的参数 返回相应数据的dataframe的data dimension和meta信息
+    入参
+        df_name : ajax传入的dataframe的名字
+    出参
+        paras : 
+            paras.df_meta df_name代表的dataframe的meta信息
+            paras.df_data df_name代表的dataframe的数据样例
+            paras.shape df_data的shape信息
+    """
     paras = {}
-    store = pd.HDFStore(HDF5_path)
-    paras['meta_list'] = get_df_meta_info(store, 'factor_s') 
-    store.close()
-    return render_template('dc_feature_engineering.html', **paras)
+    try:
+        store = pd.HDFStore(HDF5_path)
+        df_name = request.args.get('df_name', None)
+        assert HDF5_PREF+df_name+META_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+META_SUFF, store.filename)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+        df_meta = store[df_name+META_SUFF]
+        df_data = store[df_name+DATA_SUFF]
+        # step1. 处理df的meta信息 
+        col_name_list = ['col_name', 'col_datatype', 'value_range']
+        meta_list = remain_col_from_meta_list([[df_name,df_meta]], col_name_list)
+        df_meta = meta_list[0][1]
+        paras['df_meta'] = df_meta.to_html()
+        # step2. 获取dataframe shape 
+        paras['shape'] = "("+str(df_data.shape[0])+","+str(df_data.shape[1])+")"
+        # step3. 获取dataframe shape 
+        df_data = df_data.head(n=10)
+        paras['df_data'] = df_data.to_html()
+        store.close()
+        return json.dumps(paras)
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
+
+@app.route('/dc-feature-engineering/coltype-update', methods=['GET'])
+def dc_feature_engineering_coltype_update():
+    paras = {}
+    try:
+        # 确认ajax传回的df_name存在于HDFStore中
+        store = pd.HDFStore(HDF5_path)
+        df_name = request.args.get('df_name', None)
+        assert HDF5_PREF+df_name+META_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+META_SUFF, store.filename)
+        df = store[df_name+META_SUFF]
+        # 解析需要进行特征类型转换的col_name和col_datatype
+        for f in request.args.getlist('colname_coltype',None):
+            col_name = f.split('.')[1]
+            col_datatype = f.split('.')[2]
+            df.ix[df[df['col_name']==col_name].index.values[0],'col_datatype'] = col_datatype
+        store[df_name+META_SUFF] = df
+        # 更新列的meta信息
+        store.close()
+        return redirect(url_for('dc_feature_engineering'))
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
+
+@app.route('/dc-feature-engineering/datetime', methods=['GET'])
+def dc_feature_engineering_datetime():
+    """
+    功能
+        能进入到这里的数据 都保证是datetime类型了
+        将datetime列按格式转换, 并进行数值化处理
+    """
+    st(context=21)
+    ret = {}
+    try:
+        store = pd.HDFStore(HDF5_path)
+        df_name = request.args.get('df_name', None)
+        new_dataframe_name = request.args.get('new_dataframe_name',None)
+        value_as_base = pd.to_datetime(request.args.get('value_as_base'))
+        derive_prefix = request.args.get('derive_prefix',None)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+        df = store[df_name+DATA_SUFF]
+        col_name_list = []
+        for col_name in request.args.getlist('col_names',None):
+            col_name_list.append(col_name.split('.')[1])
+            print col_name
+        # 将选中的datetime类型的列进行格式转换
+        ix.tag_meta_auto(df)
+        ix.update_meta(df, col_name_list, "col_datatype","datetime")
+        ix.type_casting(df, col_name_list, dt_format="%Y%m%d") 
+        store[df_name+DATA_SUFF] = df
+        # 将转换后的数据存入新dataframe中
+        t_df = ix.derive_columns_from_datetime(
+                df, 
+                col_name_list, 
+                value_as_base=value_as_base,
+                inverse=True,
+                derive_prefix=derive_prefix)
+        if new_dataframe_name!='':
+            update_df_in_HDFStore_by_name(store, new_dataframe_name, t_df) 
+        # 这里不需要跟新md5 因为格式已经变化
+        ret['impact_columns'] = str(len(col_name_list))
+        store.close()
+        return json.dumps(ret)
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
 
 @app.route('/dc-feature-engineering/factor', methods=['GET'])
 def dc_feature_engineering_factor():
@@ -652,10 +941,11 @@ def dc_feature_engineering_factor():
             received_feature.append(f.split('.')[1])
             print f
         derive_prefix = request.args.get('derive_prefix')
+        new_dataframe_name = request.args.get('new_dataframe_name')
         assert validate_feature_engineering_factor(received_feature), "recived paras from ajax are not valid"
-        deal_feature_engineering(store, df_name, received_feature, 'REMAIN', derive_prefix)
+        deal_feature_engineering(store, df_name, received_feature, 'REMAIN', derive_prefix, new_dataframe_name)
         store.close()
-        return "test"
+        return redirect(url_for('dc_feature_engineering'))
     except Exception,e:
         return render_template('dc_error.html', e_message=e)
 
@@ -665,17 +955,20 @@ def validate_feature_engineering_factor(received_feature):
     """
     return True
 
-def deal_feature_engineering(store, df_name, feature_list, action, derive_prefix):
+def deal_feature_engineering(store, df_name, feature_list, action, derive_prefix, new_dataframe_name):
     """
     功能
-        将传入的feature进行特征打散
+        1) 将传入的feature进行特征打散
+        2) 将新生成的特征存入dataframe
     入参
         store : 与HDF5存储的接口
         df_name : 在HDF5中需要处理的dataframe
         feature_list : 需要处理的列
         action : 对传入的feature_list进行的操作
         derive_prefix : 由factor类型变量衍生出新列的前缀名
+        new_dataframe_name : 新生成的dataframe的name 
     """
+    st(context=21)
     assert action in app.config['COL_ACTION'].keys(), \
             "columns action not in app.config['COL_ACTION']"
     assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
@@ -689,9 +982,33 @@ def deal_feature_engineering(store, df_name, feature_list, action, derive_prefix
     for feature in feature_list:
         t = ix.derive_columns_from_factor(df, feature, derive_prefix=derive_prefix)
         derived.append(t)
-    df = pd.concat([df]+derived, axis=1, join_axes=[df.index])
-    # 更新data信息
-    store[df_name+DATA_SUFF] = df
+    df = pd.concat(derived, axis=1, join_axes=[df.index])
+    # 更新data信息 如果没有输入new_dataframe_name 则不做操作
+    if new_dataframe_name!='':
+        update_df_in_HDFStore_by_name(store, new_dataframe_name, df) 
 
+@app.route('/dc-feature-engineering/one-to-one', methods=['GET'])
+def dc_feature_engineering_one_to_one():
+    paras = {}
+    try:
+        # 获取ajax回传参数 
+        st(context=21)
+        store = pd.HDFStore(HDF5_path)
+        df_name = request.args.get('df_name', None)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
+        new_dataframe_name = request.args.get('new_dataframe_name', None)
+        input_col = request.args.get('input_col', None)
+        lambda_function_type = request.args.get('lambda_function_type', None)
+        output_col = request.args.get('output_col', None)
+        df = store[df_name+DATA_SUFF]
+        ix.tag_meta_auto(df)
+        if lambda_function_type=='isnull':
+            new_dataframe = ix.derive_one_to_one(df, input_col, lambda a: not pd.isnull(a), output_col)
+        store.put(new_dataframe_name+DATA_SUFF, new_dataframe)
+        store.close()
+        return redirect(url_for('dc_feature_engineering'))
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
 if __name__ == '__main__':
     app.run()

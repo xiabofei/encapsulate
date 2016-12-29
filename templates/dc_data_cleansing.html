@@ -5,8 +5,7 @@
 
 {% block page_content %}
 <div class="page-header">
-    <a><h3>基础过滤</h4></a>
-    <li><h5>列过滤 -> 分别展现各列数据的meta信息,支持删除选中的列</h5></li>
+    <a><h3>特征剔除</h4></a>
     <li><h5>关联操作 -> 同步更新科研数据的data信息与meta信息</h5></li> </div>
 <div id="meta_info_base">
     {% if meta_list %}
@@ -32,7 +31,7 @@
     {% endif %}
 </div>
 <div class="page-header">
-    <a><h3>高级筛选</h3></a>
+    <a><h3>高级特征筛选</h3></a>
     <li><h5>数据类型筛选-> 只保留特定数据类型的列数据</h5></li>
     <li><h5>列名模糊筛选 -> 如"_SUFF",筛选出以"_SUFF"结尾的列</h5></li>
     <li><h5>正则筛选 -> 筛选出取值符合正则表达式的列</h5></li>
@@ -40,8 +39,8 @@
     <li><h5>缺失值比例筛选 -> 根据列缺失值最大阈值进行筛选</h5></li>
     <li><h5>均衡度度例筛选 -> 根据列取值的均衡度进行筛选</h5></li>
 </div>
-{% if meta_list %}
 <div id="meta_info_pro">
+    {% if meta_list %}
     <div class="panel-group" id="accordion">
         {% for meta in meta_list %}
         <div class="panel panel-info">
@@ -80,7 +79,7 @@
                         <input type="text" class="form-control" name="balance_ratio" value="">
                     </div>
                     <div id="meta_table_pro">
-                            {{ show_df_as_table(meta[1],meta[0]) }}
+                        {{ show_df_as_table(meta[1],meta[0]) }}
                     </div>
                 </div>
             </div>
@@ -89,33 +88,112 @@
     </div>
     {% endif %}
 </div>
+<div class="page-header">
+    <a><h3>数据按行筛选</h4></a>
+    <li><h5>根据表达式过滤</h5></li>
+    <li><h5>根据非空比例过滤</h5></li>
+</div>
+<div id="select_row_by_expr">
+    {% if meta_list %}
+    <div class="panel-group" id="accordion">
+        {% for meta in meta_list %}
+        <div class="panel panel-info">
+            <div class="panel-heading">
+                <h4 class="panel-title text-left">
+                    <a data-toggle="collapse" href="#collapserow{{ meta[0] }}">{{ meta[0] }}</a>
+                </h4>
+            </div>
+            <div id="collapserow{{ meta[0] }}" class="panel-collapse collapse">
+                <div  class="panel-body" style="overflow-y: scroll;">
+                    <div class="form-group col-md-8">
+                        <a id="selectrow{{ meta[0] }}" class="btn btn-info active" role="button">筛选</a>
+                        <br>
+                        <label>new_dataframe_name</label>
+                        <input type="text" class="form-control" name="new_dataframe_name" value="">
+                        <label>rval_expr</label>
+                        <input type="text" class="form-control" name="rval_expr" value="">
+                        <label>non_NA_percent</label>
+                        <input type="text" class="form-control" name="non_NA_percent" value="">
+                        <label>expr_symbol</label>
+                        <input type="text" class="form-control" name="expr_symbol" value="">
+                    </div>
+                    <br>
+                    <div id="result_after_row_by_expr">
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+<div id="pageheader" class="page-header">
+    <a id="feature">
+        <h3>根据样本ID按行过滤</h3>
+    </a>
+    <li><h5>实际场景中需要从A表中获得样本ID 并对B表的病人数据按行进行筛选</h5></li>
+</div>
+{% if meta_list %}
+<div id="concat_dataframe">
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h4>输入参数</h4>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="form-group col-md-12">
+                    <div class="col-md-12">
+                        <a id="filter_row_by_ID" class="btn btn-info active" role="button">筛选</a>
+                    </div>
+                    <div class="col-md-8">
+                        <label>origin_samples</label>
+                        <select class="form-control" name="origin_samples">
+                            {% for meta in meta_list %}
+                            <option>{{ meta[0] }}</option>
+                            {% endfor %}
+                        </select> 
+                        <label>id_candicate</label>
+                        <select class="form-control" name="id_candicate">
+                            {% for meta in meta_list %}
+                            <option>{{ meta[0] }}</option>
+                            {% endfor %}
+                        </select> 
+                        <label>new_dataframe_name</label>
+                        <input type="text" class="form-control" name="id_new_dataframe_name" value="">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% macro show_df_as_table(df,df_name,if_checkbox) -%}
 <!--将dataframe转换为table显示,并根据传入参数控制是否有checkbox-->
 <table class='dataframe' border=1> 
-    <thead>
-        <tr>
-            {% if if_checkbox is defined %}
-            <th>#</th>
-            {% endif %}
-            {% for col_name in df.columns %}
-            <th>{{ col_name }}</th>
-            {% endfor %}
-        </tr>
-    </thead>
-    <tbody>
-    {% for r in range(df.index|length) %}
+<thead>
     <tr>
         {% if if_checkbox is defined %}
-        <td><input type="checkbox" name="{{ df_name }}.{{ df.iloc[r][0] }}"></td>
+        <th>#</th>
         {% endif %}
-        {% for c in range(df.iloc[r]|length) %}
-        <td>{{ df.iloc[r][c] }}</td> 
+        {% for col_name in df.columns %}
+        <th>{{ col_name }}</th>
         {% endfor %}
     </tr>
+</thead>
+<tbody>
+{% for r in range(df.index|length) %}
+<tr>
+    {% if if_checkbox is defined %}
+    <td><input type="checkbox" name="{{ df_name }}.{{ df.iloc[r][0] }}"></td>
+    {% endif %}
+    {% for c in range(df.iloc[r]|length) %}
+    <td>{{ df.iloc[r][c] }}</td> 
     {% endfor %}
-    </tbody>
+</tr>
+{% endfor %}
+</tbody>
 </table>
 {%- endmacro %}
 
@@ -124,36 +202,73 @@
 <script src={{ url_for('static', filename='jquery.js') }}></script>
 <script type=text/javascript>$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};</script>
 <script type=text/javascript>
-<!--function get_selected_df_names(){-->
-        <!--var items = [];-->
-        <!--$('select#multiple_data_type option:selected').each(function(){ items.push($(this).val()); });-->
-        <!--return items.join(', ');-->
-<!--}-->
 $(function(){
-        $("a[id^='propost']").click(function()
+    $("a[id^='propost']").click(function(){
+        var df_name = $(this).attr("id").replace('propost','');
+        $.ajax({
+            url: $SCRIPT_ROOT+'{{ url_for('dc_pro_data_cleansing') }}',
+            type: 'get',
+            data: { 'df_name':df_name, 
+                    'new_dataframe_name':$(this).siblings("[name='new_dataframe_name']").attr("value"),
+                    'data_type':$(this).siblings("[name='data_type']").attr("value"),
+                    'col_name_pattern':$(this).siblings("[name='col_name_pattern']").attr("value"),
+                    'col_value_expr':$(this).siblings("[name='col_value_expr']").attr("value"),
+                    'distinct_ratio':$(this).siblings("[name='distinct_ratio']").attr("value"),
+                    'non_NA_ratio':$(this).siblings("[name='non_NA_ratio']").attr("value"),
+                    'balance_ratio':$(this).siblings("[name='balance_ratio']").attr("value")
+                },
+            dataType: 'html',
+            success: function(response){
+                $("div#meta_table_pro").html(response);
+            }
+        });
+    });
+});
+$(function(){
+    $("a[id^='selectrow']").click(function(){
+        alert($(this).siblings("[name='expr_symbol']").attr("value"));
+        var df_name = $(this).attr("id").replace('selectrow','');
+        var query_paras = {
+            'df_name':df_name, 
+            'new_dataframe_name':$(this).siblings("[name='new_dataframe_name']").attr("value"),
+            'rval_expr':$(this).siblings("[name='rval_expr']").attr("value"),
+            'non_NA_percent':$(this).siblings("[name='non_NA_percent']").attr("value"),
+            'expr_symbol':$(this).siblings("[name='expr_symbol']").attr("value")
+        }
+        $.ajax({
+            url: $SCRIPT_ROOT+'{{ url_for('dc_select_row_by_expr') }}',
+            type: 'get',
+            data: query_paras,
+            dataType: 'json',
+            success: function(response){
+                $("div#result_after_row_by_expr").text(response.info);
+            }
+        });
+    });
+});
+<!--跨表按病人ID进行筛选-->
+$(function(){
+        $("a[id='filter_row_by_ID']").click(function()
             {
-            var df_name = $(this).attr("id").replace('propost','');
+            var origin_samples = $("select[name='origin_samples']").find('option:selected').text();
+            var id_candicate = $("select[name='id_candicate']").find('option:selected').text();
+            var new_dataframe_name = $("input[name='id_new_dataframe_name']").attr("value");
             $.ajax(
                 {
-                url: $SCRIPT_ROOT+'{{ url_for('dc_pro_data_cleansing') }}',
+                url: $SCRIPT_ROOT+'{{ url_for('df_filter_row_by_id') }}',
                 type: 'get',
-                data: { 'df_name':df_name, 
-                        'new_dataframe_name':$(this).siblings("[name='new_dataframe_name']").attr("value"),
-                        'data_type':$(this).siblings("[name='data_type']").attr("value"),
-                        <!--'data_type':get_selected_df_names(),-->
-                        'col_name_pattern':$(this).siblings("[name='col_name_pattern']").attr("value"),
-                        'col_value_expr':$(this).siblings("[name='col_value_expr']").attr("value"),
-                        'distinct_ratio':$(this).siblings("[name='distinct_ratio']").attr("value"),
-                        'non_NA_ratio':$(this).siblings("[name='non_NA_ratio']").attr("value"),
-                        'balance_ratio':$(this).siblings("[name='balance_ratio']").attr("value")
-                        },
-                dataType: 'html',
+                traditional:true,
+                data: { 'origin_samples':origin_samples, 
+                        'id_candicate':id_candicate,
+                        'new_dataframe_name':new_dataframe_name
+                    },
+                dataType: 'json',
                 success: function(response)
-                    {
-                        $("div#meta_table_pro").html(response);
-                    }
-                });
-            });
+                {
+                    alert(response.new_dataframe_name+' is created!')
+                }
+        });
+    });
 });
 </script>
 {% endblock %}
