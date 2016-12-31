@@ -77,6 +77,7 @@ def dc_dataset_register():
             paras['nrows_list'] = filter(None,csv_form.nrows_list.data.strip().split(';'))
             try:
                 # 保证长度与内容相等
+                st(context=21)
                 assert len(paras['file_list'])==len(paras['nrows_list']), u'file_list与nrows_list长度不相等'
                 # df_l [(df名1, df1), (df名2, df2), ...]
                 df_l = [
@@ -238,7 +239,7 @@ def dc_data_exploration():
             divide_dataframe_for_exploration(store, df_list_need_exploration, df_list_not_exploration)
             # 2.处理需要exploration的dataframe
             for df in df_list_need_exploration:
-                ix.tag_meta_auto(df[1], num2factor_threshold=10)
+                ix.tag_meta_auto(df[1], num2factor_threshold=2)
                 # 重写dataframe对应的meta的全表信息 & 信息添加到meta_list中
                 meta_column_names, meta_df = trans_peek_to_2Dtable(peek(df[1], meta=True), df[1], df[0]) 
                 meta_column_names = [ meta_show_name_map.get(meta, u'未设置显示名称') for meta in meta_column_names ]
@@ -352,18 +353,7 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
                 tmp.append(df_peek[col_name][meta])
         # 1.列变量取值范围
         dtype = df_peek[col_name]['col_datatype']
-        if dtype not in avaiable_dtypes:
-            tmp.append(u'uncertain data type')
-        elif dtype =='character':
-            tmp.append('character')
-        elif dtype=='numeric':
-            tmp.append( (df_ori[col_name].min(), df_ori[col_name].max()) )
-        elif dtype=='factor_s':
-            tmp.append( df_ori[col_name].unique() )
-        elif dtype=='empty':
-            tmp.append( 'empty' )
-        else:
-            tmp.append(u'uncertain data type')
+        tmp.append( get_colrange_by_coltype(df_ori, col_name, dtype) )
         # 2.缺失值比例
         tmp.append( str(df_ori[col_name].isnull().sum()*100.0 / len(df_ori[col_name]))+"%")
         # 3.列变量分布信息
@@ -384,6 +374,35 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
         print e
         st(context=21)
     return (col_names, df_col_meta)
+
+def get_colrange_by_coltype(df_data, col_name, dtype):
+    """
+    功能
+        根据列变量类型 获取其取值范围
+
+    入参
+        df_data : 待探索的原始datafraem
+        col_name : 数据列名称
+        dtype : 这一列的数据类型
+
+    出参
+        列的取值分布:
+            如果是numeric, 则返回(min, max)
+            如果是category, 则返回[c1, c2, c3, ...]
+            如果是其他类型, 暂时不做处理, 只返回该类型名
+    """
+    if dtype not in avaiable_dtypes:
+        return u'uncertain data type'
+    elif dtype =='character':
+        return u'character'
+    elif dtype=='numeric':
+        return (df_data[col_name].min(), df_data[col_name].max())
+    elif dtype=='factor_s':
+        return df_data[col_name].unique()
+    elif dtype=='empty':
+        return u'empty'
+    else:
+        return u'uncertain data type'
 
 # 定义'df列类型'到'分布图'的映射关系: 一个数据类型可以对应多个分布图
 map_dtype_figtype = {'character' : [],
@@ -868,16 +887,25 @@ def dc_feature_engineering_coltype_update():
         # 确认ajax传回的df_name存在于HDFStore中
         store = pd.HDFStore(HDF5_path)
         df_name = request.args.get('df_name', None)
+        assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name+DATA_SUFF, store.filename)
         assert HDF5_PREF+df_name+META_SUFF in store.keys(), \
             "dataframe %s not in store %s"%(HDF5_PREF+df_name+META_SUFF, store.filename)
-        df = store[df_name+META_SUFF]
+        df_meta = store[df_name+META_SUFF]
+        df_data = store[df_name+DATA_SUFF]
         # 解析需要进行特征类型转换的col_name和col_datatype
         for f in request.args.getlist('colname_coltype',None):
             col_name = f.split('.')[1]
             col_datatype = f.split('.')[2]
-            df.ix[df[df['col_name']==col_name].index.values[0],'col_datatype'] = col_datatype
-        store[df_name+META_SUFF] = df
+            df_meta.ix[df_meta[df_meta['col_name']==col_name].index.values[0],'col_datatype'] = col_datatype
+            # 更新meta表中的distribution_figs
+            distribution_figs = create_distribution_fig(df_data, df_name, col_name, col_datatype)
+            df_meta.ix[df_meta[df_meta['col_name']==col_name].index.values[0],'distribution_figs'] = distribution_figs
+            # 更新meta表中的value_range
+            value_range = get_colrange_by_coltype(df_data, col_name, col_datatype)
+            df_meta.ix[df_meta[df_meta['col_name']==col_name].index.values[0],'value_range'] = str(value_range)
         # 更新列的meta信息
+        store[df_name+META_SUFF] = df_meta
         store.close()
         return redirect(url_for('dc_feature_engineering'))
     except Exception,e:
@@ -968,7 +996,6 @@ def deal_feature_engineering(store, df_name, feature_list, action, derive_prefix
         derive_prefix : 由factor类型变量衍生出新列的前缀名
         new_dataframe_name : 新生成的dataframe的name 
     """
-    st(context=21)
     assert action in app.config['COL_ACTION'].keys(), \
             "columns action not in app.config['COL_ACTION']"
     assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \
@@ -992,7 +1019,6 @@ def dc_feature_engineering_one_to_one():
     paras = {}
     try:
         # 获取ajax回传参数 
-        st(context=21)
         store = pd.HDFStore(HDF5_path)
         df_name = request.args.get('df_name', None)
         assert HDF5_PREF+df_name+DATA_SUFF in store.keys(), \

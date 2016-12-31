@@ -37,7 +37,11 @@
     {% endif %}
     {% if selected_feature %}
     <div class="panel-heading"><h4>特征选择后数据样本</h4></div>
-    <div class="panel-body"><table class='table table-striped'> {{ head_sample|safe }}</table></div>
+    <div class="panel-body" style="overflow-y: scroll;">
+        <table class='table table-striped'>
+            {{ head_sample|safe }}
+        </table>
+    </div>
     {% endif %}
 </div>
 {% endblock %}

@@ -5,15 +5,11 @@ This aims at a tiny demo for demonstration but not for realease version
 """
 from flask import Flask, request, redirect, url_for, session, send_from_directory
 import sys
-# 检查参数
-if len(sys.argv)<2: raise ValueError("input argv error")
 # 加载需要的package
-if sys.argv[1] == 's':
-    another_cch_path = '/Users/xiabofei/Documents/cchdir'
-    sys.path.append(another_cch_path)
-    import src as ix
-else:
-    import cch as ix
+another_cch_path = '/Users/xiabofei/Documents/cchdir'
+sys.path.append(another_cch_path)
+import src as ix
+# import cch as ix
 import pandas as pd
 import numpy as np
 from os.path import join as pjoin
@@ -62,7 +58,8 @@ def internal_server_error(e):
 
 # 数据获取
 class RegForm(Form):
-    file_name = StringField(u'csv文件名称', default=u'SynPUFs.curated_1.csv', validators=[DataRequired()]) 
+    file_name = StringField(u'csv文件名称', default=u'heart.csv', validators=[DataRequired()]) 
+    label_name = StringField(u'label名', default=u'label', validators=[DataRequired()])
     submit = SubmitField('Submit')
 @app.route('/dataset-register', methods=['GET', 'POST'])
 def dataset_register():
@@ -75,20 +72,22 @@ def dataset_register():
     paras['form'] = form
     if request.method=='POST' and form.validate():
         paras['file_name'] = form.file_name.data
+        paras['label_name'] = form.label_name.data
+        file_name = paras['file_name'].split('.')[0]
+        label_column_name = paras['label_name']
         try:
             # 读入数据
-            df_SynPUFs = ix.read_csv_file_to_df(P(paras['file_name']), sep=',')
+            df_data = ix.read_csv_file_to_df(P(paras['file_name']), sep=',')
             # 数据按列分割
-            df_SynPUFs = df_SynPUFs.drop(['Unnamed: 0'], axis=1)
-            data_x_raw = df_SynPUFs[df_SynPUFs.columns.difference(['_LBL'])]
-            data_y = df_SynPUFs['_LBL']
+            data_x_raw = df_data[df_data.columns.difference([label_column_name])]
+            data_y = df_data[label_column_name]
             # 存中间数据 (后期用数据库存取)
-            df_SynPUFs.to_pickle(tmp_dir+'df_SynPUFs')
+            df_data.to_pickle(tmp_dir+file_name)
             data_x_raw.to_pickle(tmp_dir+'data_x_raw')
             data_y.to_pickle(tmp_dir+'data_y')
             # session中存中间数据
-            session['pd_dataFrame'] = ['df_SynPUFs', 'data_x_raw', 'data_y']
-            paras['pd_shape'] = [df_SynPUFs.shape, data_x_raw.shape, data_y.shape]
+            session['pd_dataFrame'] = ['df_data', 'data_x_raw', 'data_y']
+            paras['pd_shape'] = [df_data.shape, data_x_raw.shape, data_y.shape]
             paras['curated_data'] = session['pd_dataFrame']
             return render_template('dataset_register.html', **paras)
         except Exception,e:
@@ -130,7 +129,7 @@ def feature_selection():
             data_x = data_x_raw[slct_cols]
             data_x.to_pickle(tmp_dir+'data_x') 
             # 页面展现特征选择后的结果
-            head_sample = data_x.head(n=20).to_html(classes='table table-striped')
+            head_sample = data_x.to_html(classes='table table-striped')
             paras['head_sample'] = head_sample
             paras['selected_feature'] = info_gain_feature
             return render_template('feature_selection.html', **paras)
@@ -228,4 +227,4 @@ def grouping_rule_mining():
     return render_template('grouping_rule_mining.html', **paras)
 
 if __name__ == '__main__':
-    app.run()
+    app.run(port='5001')
