@@ -6,10 +6,10 @@ This aims at a tiny demo for demonstration but not for realease version
 from flask import Flask, request, redirect, url_for, session, send_from_directory
 import sys
 # 加载需要的package
-another_cch_path = '/Users/xiabofei/Documents/cchdir'
-sys.path.append(another_cch_path)
-import src as ix
-# import cch as ix
+# another_cch_path = '/Users/xiabofei/Documents/cchdir'
+# sys.path.append(another_cch_path)
+# import src as ix
+import cch as ix
 import pandas as pd
 import numpy as np
 from os.path import join as pjoin
@@ -58,7 +58,7 @@ def internal_server_error(e):
 
 # 数据获取
 class RegForm(Form):
-    file_name = StringField(u'csv文件名称', default=u'heart.csv', validators=[DataRequired()]) 
+    file_name = StringField(u'csv文件名称', default=u'df_heart_derived_DATA.csv', validators=[DataRequired()]) 
     label_name = StringField(u'label名', default=u'label', validators=[DataRequired()])
     submit = SubmitField('Submit')
 @app.route('/dataset-register', methods=['GET', 'POST'])
@@ -116,7 +116,9 @@ def feature_selection():
             # 模拟从数据库获取数据
             data_x_raw = pd.read_pickle(tmp_dir+form.data_X.data)
             data_y = pd.read_pickle(tmp_dir+form.data_Y.data)
+            data_y = data_y > 1
             # 选择相关度最高的k个feature
+            st(context=21)
             info_gain_index, info_gain_feature = ix.feature_selection(
                     str(form.strategy.data),
                     str(form.feature_selection_method.data),

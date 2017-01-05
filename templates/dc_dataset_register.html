@@ -90,6 +90,7 @@
             <div class="panel-body" style="overflow-y: scroll;">
                 <p><a id="delete{{ df[0] }}" class="btn btn-info active" role="button">删除</a></p>
                 {{ df[1].head(n=df_nrow).to_html()|safe }}
+                <p><a id="storecsv{{ df[0] }}" class="btn btn-info active" role="button">生成csv文件</a></p>
             </div>
         </div>
     </div>
@@ -109,6 +110,23 @@ $(function(){
             $.ajax(
                 {
                 url: $SCRIPT_ROOT+'{{ url_for('delete_dataframe') }}',
+                type: 'get',
+                data: { 'df_name_type':df_name_type},
+                dataType: 'html',
+                success: function(response)
+                    {
+                        location.reload(response);
+                    }
+                });
+            });
+});
+$(function(){
+        $("a[id^='storecsv']").click(function()
+            {
+            var df_name_type = $(this).attr("id").replace('storecsv','');
+            $.ajax(
+                {
+                url: $SCRIPT_ROOT+'{{ url_for('store_dataframe_to_csv') }}',
                 type: 'get',
                 data: { 'df_name_type':df_name_type},
                 dataType: 'html',

@@ -77,7 +77,6 @@ def dc_dataset_register():
             paras['nrows_list'] = filter(None,csv_form.nrows_list.data.strip().split(';'))
             try:
                 # 保证长度与内容相等
-                st(context=21)
                 assert len(paras['file_list'])==len(paras['nrows_list']), u'file_list与nrows_list长度不相等'
                 # df_l [(df名1, df1), (df名2, df2), ...]
                 df_l = [
@@ -139,6 +138,23 @@ def delete_dataframe():
             if potential_meta_name in store.keys():
                 store.remove(potential_meta_name)
         store.close()
+        return redirect(url_for('dc_dataset_register'))
+    except Exception,e:
+        return render_template('dc_error.html', e_message=e)
+
+@app.route('/store-dataframe-to-csv', methods=['GET'])
+def store_dataframe_to_csv():
+    """
+    将dataframe另存为csv格式
+    """
+    try:
+        st(context=21)
+        store = pd.HDFStore(HDF5_path)
+        df_name_type = request.args.get('df_name_type', None)
+        assert HDF5_PREF+df_name_type in store.keys(), \
+            "dataframe %s not in store %s"%(HDF5_PREF+df_name_type, store.filename)
+        df = store[HDF5_PREF+df_name_type]
+        df.to_csv('/Users/xiabofei/Documents/cchdir/notebook/data/'+str(df_name_type)+'.csv', index=False)
         return redirect(url_for('dc_dataset_register'))
     except Exception,e:
         return render_template('dc_error.html', e_message=e)
