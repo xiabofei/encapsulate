@@ -11,8 +11,8 @@
     <li><h5>根据实际数据要求 手动修改某个特征的数据类型</h5></li>
 </div>
 {% if meta_list_col_type_update %}
-<div id="meta_info_pro">
-    <div class="panel-group" id="accordion">
+<div id="feature_convert">
+    <div class="panel-group">
         {% for meta in meta_list_col_type_update %}
         <div class="panel panel-info">
             <div class="panel-heading">
@@ -39,8 +39,8 @@
     <li><h5>将factor类型变量的特征打散</h5></li>
 </div>
 {% if meta_list_factor_s %}
-<div id="meta_info_pro">
-    <div class="panel-group" id="accordion">
+<div id="meta_factor">
+    <div class="panel-group">
         {% for meta in meta_list_factor_s %}
         <div class="panel panel-info">
             <div class="panel-heading">
@@ -73,7 +73,7 @@
 </div>
 {% if meta_list_datetime %}
 <div id="meta_datetime">
-    <div class="panel-group" id="accordion">
+    <div class="panel-group">
         {% for meta in meta_list_datetime %}
         <div class="panel panel-info">
             <div class="panel-heading">
@@ -108,8 +108,8 @@
     <li><h5>利用lambda表达式对单列特征进行转换</h5></li>
 </div>
 {% if meta_list_one_to_one %}
-<div id="meta_datetime">
-    <div class="panel-group" id="accordion">
+<div id="meta_one_to_one">
+    <div class="panel-group">
         {% for meta in meta_list_one_to_one %}
         <div class="panel panel-info">
             <div class="panel-heading">
@@ -149,7 +149,7 @@
     <li><h5>将每个样本的多维度特征进行join操作</h5></li>
 </div>
 {% if concat_dataframe %}
-<div id="concat_dataframe">
+<div id="concat_dataframe_action">
     <div class="panel panel-default">
         <div class="panel-heading">
             <h4>输入参数</h4>
@@ -327,8 +327,7 @@ $(function(){
             dataType: 'html',
             success: function(response)
             {
-            <!--alert("Success");-->
-            <!--$("div#feature_factor").html(response);-->
+            location.reload(response);
             }
             });
         });
@@ -474,7 +473,7 @@ $(function(){
                 dataType: 'json',
                 success: function(response)
                 {
-                    alert(response.new_dataframe_name+' is created!')
+                    <!--location.reload(response);-->
                 }
         });
     });

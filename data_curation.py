@@ -148,7 +148,6 @@ def store_dataframe_to_csv():
     将dataframe另存为csv格式
     """
     try:
-        st(context=21)
         store = pd.HDFStore(HDF5_path)
         df_name_type = request.args.get('df_name_type', None)
         assert HDF5_PREF+df_name_type in store.keys(), \
@@ -451,7 +450,9 @@ def create_distribution_fig(df, df_name, col_name, dtype):
             ax = df[col_name].plot(kind=figtype) if figtype not in need_value_count_figtype \
                     else df[col_name].value_counts().plot(kind=figtype)
             fig = ax.get_figure()
-            fig_name = str(df_name)+'_'+str(col_name)+'_'+str(figtype)+'.png'
+            # 由于要作为url 如果col_name中有特殊字符(如'.')  则需要被替换掉
+            # st(context=21)
+            fig_name = str(df_name)+'_'+str(col_name.replace('.', '_'))+'_'+str(figtype)+'.png'
             fig.savefig(fig_dir+fig_name)
             print fig_name
             ret.append(fig_name)
@@ -827,7 +828,7 @@ def dc_concat_dataframe():
     出参
         返回新生成的dataframe信息的json串
     """
-    st(context=21)
+    # st(context=21)
     ret = {}
     with pd.HDFStore(HDF5_path) as store:
         left_df_name = request.args.get('left_df_name', None)

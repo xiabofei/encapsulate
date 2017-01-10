@@ -27,10 +27,10 @@
                     <td>{{ col }}</td>
                     {% endfor %}
                     <!--控制显示详细信息的按钮-->
-                    <td><a data-toggle="collapse" href="#details{{ meta_list[i][0] }}{{ meta[0] }}">分布信息</a></td>
+                    <td><a data-toggle="collapse" href="#details{{ meta_list[i][0] }}{{ meta[0]|replace(".", "_") }}">分布信息</a></td>
                 </tr>
                 <!--控制是否显示该列的数据分布图-->
-                <tr class="collapse out" id="details{{ meta_list[i][0] }}{{ meta[0] }}">
+                <tr class="collapse out" id="details{{ meta_list[i][0] }}{{ meta[0]|replace(".", "_") }}">
                     <td align="center" colspan={{ meta_list[i][1][0]|length }}>
                         {% for col in meta[(meta_list[i][1][0]|length)-1].split('#') %}
                         {% if col!=''  %}

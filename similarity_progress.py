@@ -118,7 +118,6 @@ def feature_selection():
             data_y = pd.read_pickle(tmp_dir+form.data_Y.data)
             data_y = data_y > 1
             # 选择相关度最高的k个feature
-            st(context=21)
             info_gain_index, info_gain_feature = ix.feature_selection(
                     str(form.strategy.data),
                     str(form.feature_selection_method.data),
