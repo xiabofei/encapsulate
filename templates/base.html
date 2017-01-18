@@ -1,6 +1,6 @@
 {% extends "bootstrap/base.html" %}
 
-{% block title %}DHC-IBM 相似病患分析挖掘{% endblock %}
+{% block title %}DHC-IBM 医疗科研数据分析挖掘{% endblock %}
 
 {% block head %}
 {{ super() }}
@@ -18,14 +18,15 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
             </button>
-            <a class="navbar-brand" href="/">DHC相似病患分析demo</a>
+            <a class="navbar-brand" href="/">医疗科研大数据分析</a>
         </div>
         <div class="navbar-collapse collapse">
             <ul class="nav navbar-nav">
-                <li><a href={{ url_for('dataset_register') }}>step1 数据获取</a></li>
-                <li><a href={{ url_for('feature_selection') }}>step2 特征选择</a></li>
-                <li><a href={{ url_for('patient_clustering') }}>step3 患者聚类</a></li>
-                <li><a href={{ url_for('grouping_rule_mining') }}>step4 规则挖掘</a></li>
+                <li><a href={{ url_for('dataset_register') }}>标签处理</a></li>
+                <li><a href={{ url_for('feature_selection') }}>因子重要度分析</a></li>
+                <li><a href={{ url_for('patient_clustering') }}>患者聚类</a></li>
+                <li><a href={{ url_for('grouping_rule_mining') }}>规则挖掘</a></li>
+                <li><a href={{ url_for('rist_prediction') }}>疾病风险预测</a></li>
             </ul>
         </div>
     </div>

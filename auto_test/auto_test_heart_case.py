@@ -98,6 +98,7 @@ def auto_data_exploration(driver):
     touch_actions = TouchActions(driver)
     touch_actions.scroll(0, -400).perform()
     # 3. 展示每个特征的详细分布比例 
+    """
     xpaths = [
             '//*[@id="menudf_heart"]/table/tbody/tr[1]/td[6]/a',
             '//*[@id="menudf_heart"]/table/tbody/tr[3]/td[6]/a',
@@ -110,6 +111,7 @@ def auto_data_exploration(driver):
         wait_for(2)
         feature_detail.click()
         wait_for(2)
+    """
 
 def auto_feature_type_convert(driver):
     wait = WebDriverWait(driver, 30)
@@ -122,8 +124,8 @@ def auto_feature_type_convert(driver):
     df_heart_convert = driver.find_element_by_xpath('//*[@id="feature_convert"]/div/div/div[1]/h4/a')
     df_heart_convert.click()
     wait_for(2)
-    touch_actions = TouchActions(driver)
-    touch_actions.scroll(0, 200).perform()
+    # touch_actions = TouchActions(driver)
+    # touch_actions.scroll(0, 200).perform()
     wait_for(2)
     feature_type_xpaths = [
                     (
@@ -151,11 +153,6 @@ def auto_feature_type_convert(driver):
     trans_bt = driver.find_element_by_xpath('//*[@id="coltypeupdatedf_heart"]')
     trans_bt.click()
     wait_for(7)
-    # 3. 回到数据摸底页面 查看类型转换后的结果
-    auto_data_exploration(driver)
-    entry_li = driver.find_element_by_xpath('/html/body/div[1]/div/div[2]/ul/li[4]/a')
-    entry_li.click()
-    wait_for(1)
 
 def _convert_feature_type(driver, wait, xpaths):
     for xpath in xpaths: 
@@ -194,6 +191,7 @@ def auto_factor_feature_binning(driver):
     factor_binning_bt.click()
     wait_for(1)
     # 2. 查看打散后的生成的dataframe
+    st(context=3)
     wait.until(EC.visibility_of_element_located((By.LINK_TEXT, '数据预览')))
     data_presee = driver.find_element_by_link_text('数据预览')
     data_presee.click()
@@ -215,6 +213,7 @@ def auto_factor_feature_binning(driver):
     df_heart_derived_factor_show.click()
     wait_for(2)
     # 3. 回到feature engineering页面 删除原有的factor feature
+    st(context=3)
     entry_li = driver.find_element_by_xpath('/html/body/div[1]/div/div[2]/ul/li[3]/a')
     entry_li.click()
     wait_for(2)
@@ -232,6 +231,7 @@ def auto_factor_feature_binning(driver):
     filter_bt.click()
     wait_for(2)
     # 4. 重新执行data exploration
+    st(context=3)
     entry_li = driver.find_element_by_xpath('/html/body/div[1]/div/div[2]/ul/li[2]/a')
     entry_li.click()
     wait_for(1)
@@ -289,7 +289,7 @@ def auto_concat_dataframe(driver):
     df_heart_output.click()
     touch_actions = TouchActions(driver)
     touch_actions.scroll(0, 600).perform()
-    wait_for(2) 
+    wait_for(5) 
     # 4. 生成csv文件
     create_csv = driver.find_element_by_xpath('//*[@id="storecsvdf_heart_output_DATA"]')
     create_csv.click()
@@ -323,6 +323,7 @@ def similarity_process(driver):
     submit_bt.click()
     wait_for(2)
     # 2. 特征选择
+    st(context=3)
     feature_selection = driver.find_element_by_xpath('/html/body/div[1]/div/div[2]/ul/li[2]/a')
     feature_selection.click()
     wait_for(2)
@@ -344,6 +345,7 @@ def similarity_process(driver):
     touch_actions.scroll(0, -500).perform()
     wait_for(2) 
     # 3. 患者聚类
+    st(context=3)
     patient_cluster = driver.find_element_by_xpath('/html/body/div[1]/div/div[2]/ul/li[3]/a')
     patient_cluster.click()
     wait_for(2)
@@ -375,6 +377,7 @@ def similarity_process(driver):
     touch_actions.scroll(0, -500).perform()
     wait_for(2) 
     # 4. 规则挖掘
+    st(context=3)
     rule_mining = driver.find_element_by_xpath('/html/body/div[1]/div/div[2]/ul/li[4]/a')
     rule_mining.click()
     wait_for(2)
@@ -397,14 +400,22 @@ if __name__ == '__main__':
         # data curation
         st(context=3)
         open_datacuration_page(driver, 'http://127.0.0.1:5000')
+        st(context=3)
         auto_data_preview(driver)
+        st(context=3)
         auto_data_exploration(driver)
+        st(context=3)
         auto_feature_type_convert(driver)
+        st(context=3)
         auto_factor_feature_binning(driver)
+        st(context=3)
         auto_concat_dataframe(driver)
+        st(context=3)
         # similarity patient clustering
         open_similarity_page(driver, 'http://127.0.0.1:5001')
+        st(context=3)
         similarity_process(driver)
+        st(context=3)
     finally:
         if driver is not None:
             driver.quit()

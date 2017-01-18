@@ -3,15 +3,15 @@
 encapsulate cch api as web service via flask
 This aims at a tiny demo for demonstration but not for realease version
 """
-from flask import Flask, request, redirect, url_for, session, send_from_directory
+from flask import Flask, request, make_response, redirect, url_for, session, send_from_directory
 import sys
 # 加载需要的package
 # another_cch_path = '/Users/xiabofei/Documents/cchdir'
 # sys.path.append(another_cch_path)
 # import src as ix
-import cch as ix
 import pandas as pd
 import numpy as np
+import cch as ix
 from os.path import join as pjoin
 P = lambda p: pjoin(base_dir, p)
 # 基础数据路径
@@ -33,6 +33,23 @@ from ipdb import set_trace as st
 # json
 import json
 from pandas.io.json import json_normalize
+# sklearn
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+
+from functools import wraps, update_wrapper
+from datetime import datetime
+
+def nocache(view):
+    @wraps(view)
+    def no_cache(*args, **kwargs):
+        response = make_response(view(*args, **kwargs))
+        response.headers['Last-Modified'] = datetime.now()
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        return response
+    return update_wrapper(no_cache, view)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
@@ -41,6 +58,7 @@ bootstrap = Bootstrap(app)
 moment = Moment(app)
 
 @app.route('/uploads/<path:filename>')
+@nocache
 def download_file(filename):
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
@@ -226,6 +244,112 @@ def grouping_rule_mining():
         except Exception,e:
             return render_template('error.html', e_message=e)
     return render_template('grouping_rule_mining.html', **paras)
+
+class RiskPredictionForm(Form):
+    data_X = StringField(u'样本数据', default='data_x_raw', validators=[DataRequired()]) 
+    data_y = StringField(u'样本标签', default='data_y', validators=[DataRequired()])
+    algorithm = SelectField(u'风险预测算法', choices=[("LR","LR"), ("RF","RF")]) 
+    ratio = StringField(u'测试数据&训练数据划分比例', default=0.2, validators=[DataRequired()])
+    threshold = StringField(u'模型阈值', default=0.5, validators=[DataRequired()])
+    submit = SubmitField('Submit')
+@app.route('/risk-prediction', methods=['GET', 'POST'])
+def rist_prediction():
+    paras = {}
+    form = RiskPredictionForm()
+    paras['form'] = form
+    if request.method=='POST' and form.validate():
+        try:
+            # 读取数据
+            # st(context=21)
+            data_X = pd.read_pickle(tmp_dir+form.data_X.data)
+            data_y = pd.read_pickle(tmp_dir+form.data_y.data)
+            data_y = data_y - 1.0
+            ratio = float(form.ratio.data)
+            threshold = float(form.threshold.data)
+            input_dict = {
+                    'data_X':data_X,
+                    'data_y':data_y,
+                    'ratio':ratio,
+                    'threshold':threshold
+                    }
+            # 风险预测过程
+            output = _risk_prediction(input_dict)
+            # 整合预测结果
+            paras['roc_curve'] = output.get('roc_curve')
+            paras['evaluation_metrics'] = output.get('evaluation_metrics', None)
+            if paras['evaluation_metrics'] is not None:
+                paras['evaluation_metrics'] = paras['evaluation_metrics'].to_html(classes='table table-striped')
+            paras['feature_importance'] = output.get('feature_importance')
+            if paras['feature_importance'] is not None:
+                feature_importance_sorted = sorted(paras['feature_importance'].iteritems(), key=lambda d:abs(d[1]), reverse=True)
+                paras['feature_importance'] = pd.DataFrame(feature_importance_sorted, columns=['feature name', 'feature weight coefficient'])
+                paras['feature_importance'] = paras['feature_importance'].to_html(classes='table table-striped')
+            return render_template('risk_prediction.html', **paras)
+        except Exception,e:
+            return render_template('error.html', e_message=e)
+    return render_template('risk_prediction.html', **paras)
+
+def _risk_prediction(input_dict):
+    # 提取参数
+    data_X = input_dict['data_X']
+    data_y = input_dict['data_y'].squeeze()
+    ratio = input_dict['ratio']
+    threshold = input_dict['threshold']
+    
+    # 设定图片的路径
+    path = 'roc_new.png'
+    output_dict = {'roc_curve': path}
+    
+    # 归一化特征
+    data_X = data_X / data_X.max().replace(0, 1)
+    
+    # 将数据集随机分成训练集和测试集，利用训练集建风险预测模型
+    X_train, X_test, y_train, y_test \
+        = train_test_split(data_X, data_y, test_size=ratio, \
+                           random_state=np.random.RandomState(), \
+                           stratify = data_y)
+    predictor \
+        = ix.build_prediction_model('logistic_regression', X_train, \
+                                    y_train, params=None)
+    
+    # 模型中特征的系数
+    output_dict['feature_importance'] \
+        = dict(zip(data_X.columns.values, predictor.coef_.squeeze()))
+    
+    # 利用模型得到标签的预测，再对预测结果评分
+    p_y_train = ix.predict('logistic_regression', predictor, X_train)
+    p_y_test = ix.predict('logistic_regression', predictor, X_test)
+    result_train = ix.evaluate_result(y_train, p_y_train, threshold=threshold)
+    result_test= ix.evaluate_result(y_test, p_y_test, threshold=threshold)
+    
+    # 对预测结果的评分
+    output_dict['evaluation_metrics'] \
+        = pd.DataFrame(data=[result_train, result_test], \
+                       index=[u'训练集', u'测试集'])
+    
+    # 计算训练、测试集的ROC曲线和曲线下面积
+    fpr_train, tpr_train, _ = roc_curve(y_train, p_y_train)
+    fpr_test, tpr_test, _ = roc_curve(y_test, p_y_test)
+    auc_train = auc(fpr_train, tpr_train)
+    auc_test = auc(fpr_test, tpr_test)
+    
+    # 绘出ROC曲线，并保存图片
+    lw = 2
+    plt.figure()
+    plt.plot(fpr_train, tpr_train, label='train (area = %0.3f)' % auc_train, lw=lw)
+    plt.plot(fpr_test, tpr_test, label='test (area = %0.3f)' % auc_test, lw=lw)
+    plt.plot([0, 1], [0, 1], '--', lw=lw)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.0])
+    plt.axis('square')
+    plt.xlabel('false positive rate')
+    plt.ylabel('true positive rate')
+    plt.title('Receiver Operating Characteristic')
+    plt.legend(loc="lower right")
+    plt.savefig(tmp_dir+path)
+    
+    # 返回结果
+    return output_dict
 
 if __name__ == '__main__':
     app.run(port='5001')

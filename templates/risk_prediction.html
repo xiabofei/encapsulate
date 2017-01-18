@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}CCH{% endblock %}
+
+{% block page_content %}
+<div class="page-header">
+    <h1>疾病风险预测</h1>
+</div>
+<div class="panel panel-default">
+    <div class="panel-heading"><h4>输入参数</h4></div>
+    <div class="panel-body">{{ wtf.quick_form(form) }}</div>
+</div>
+<div class="panel panel-primary">
+    <!--roc_curve-->
+    {% if roc_curve %}
+        <div class="panel-heading"><h4>ROC曲线</h4></div>
+        <div class="panel-body"><img src={{ url_for('download_file', filename=roc_curve) }}?dummy=1024 width="444" height="333" /></div>
+    {% endif %}
+    <!--evaluation metric-->
+    {% if evaluation_metrics %}
+        <div class="panel-heading"><h4>模型评价结果</h4></div>
+        <div class="panel-body">
+            <table class='table table-striped'>
+                {{ evaluation_metrics|safe }}
+            </table>
+        </div>
+    {% endif %}
+    <!--feature importance-->
+    {% if feature_importance %}
+        <div class="panel-heading"><h4>风险因素重要性</h4></div>
+        <div class="panel-body">
+            <table class='table table-striped'>
+                {{ feature_importance|safe }}
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}
