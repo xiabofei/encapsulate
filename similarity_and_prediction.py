@@ -4,11 +4,8 @@ encapsulate cch api as web service via flask
 This aims at a tiny demo for demonstration but not for realease version
 """
 from flask import Flask, request, make_response, redirect, url_for, session, send_from_directory
+from flask_script import Manager
 import sys
-# 加载需要的package
-# another_cch_path = '/Users/xiabofei/Documents/cchdir'
-# sys.path.append(another_cch_path)
-# import src as ix
 import pandas as pd
 import numpy as np
 import cch as ix
@@ -36,6 +33,7 @@ from pandas.io.json import json_normalize
 # sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
+from sklearn import preprocessing
 import matplotlib.pyplot as plt
 
 from functools import wraps, update_wrapper
@@ -54,11 +52,11 @@ def nocache(view):
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hard to guess string'
 app.config['UPLOAD_FOLDER'] = tmp_dir
+# manager = Manager(app)
 bootstrap = Bootstrap(app)
 moment = Moment(app)
 
 @app.route('/uploads/<path:filename>')
-@nocache
 def download_file(filename):
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
@@ -151,6 +149,10 @@ def feature_selection():
             head_sample = data_x.to_html(classes='table table-striped')
             paras['head_sample'] = head_sample
             paras['selected_feature'] = info_gain_feature
+            fea_score = {}
+            for item in info_gain_feature:
+                fea_score[item['feature_name']] = item['feature_scores']
+            paras['feature_barh'] = _feature_importance_barh(fea_score,'fea_IG', False)
             return render_template('feature_selection.html', **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)
@@ -253,14 +255,13 @@ class RiskPredictionForm(Form):
     threshold = StringField(u'模型阈值', default=0.5, validators=[DataRequired()])
     submit = SubmitField('Submit')
 @app.route('/risk-prediction', methods=['GET', 'POST'])
-def rist_prediction():
+def risk_prediction():
     paras = {}
     form = RiskPredictionForm()
     paras['form'] = form
     if request.method=='POST' and form.validate():
         try:
             # 读取数据
-            # st(context=21)
             data_X = pd.read_pickle(tmp_dir+form.data_X.data)
             data_y = pd.read_pickle(tmp_dir+form.data_y.data)
             data_y = data_y - 1.0
@@ -284,10 +285,27 @@ def rist_prediction():
                 feature_importance_sorted = sorted(paras['feature_importance'].iteritems(), key=lambda d:abs(d[1]), reverse=True)
                 paras['feature_importance'] = pd.DataFrame(feature_importance_sorted, columns=['feature name', 'feature weight coefficient'])
                 paras['feature_importance'] = paras['feature_importance'].to_html(classes='table table-striped')
+                paras['feature_barh'] = _feature_importance_barh(output.get('feature_importance'), 'feature_importance', True)
             return render_template('risk_prediction.html', **paras)
         except Exception,e:
             return render_template('error.html', e_message=e)
     return render_template('risk_prediction.html', **paras)
+
+ONE = 1
+
+def _normlization(df):
+    """输入feature归一化
+        
+        Parameters
+        ----------
+            df:
+                DataFrame
+        Return
+        ------
+    """
+    # return pd.DataFrame(preprocessing.scale(df), columns=df.columns) 
+    return (df - df.min()) / (df.max() - df.min()).replace(0, ONE) 
+
 
 def _risk_prediction(input_dict):
     # 提取参数
@@ -301,7 +319,8 @@ def _risk_prediction(input_dict):
     output_dict = {'roc_curve': path}
     
     # 归一化特征
-    data_X = data_X / data_X.max().replace(0, 1)
+    # data_X = data_X / data_X.max().replace(0, ONE)
+    data_X = _normlization(data_X)
     
     # 将数据集随机分成训练集和测试集，利用训练集建风险预测模型
     X_train, X_test, y_train, y_test \
@@ -351,5 +370,49 @@ def _risk_prediction(input_dict):
     # 返回结果
     return output_dict
 
+def _feature_importance_barh(feature_dict, name, ifgird):
+    
+    """
+    输入特征的系数，绘出图表展示特征的重要性
+    参数：
+        feature_dict:
+            dict
+            特征的系数
+            { str : float } { 特征名称 : 特征系数 }
+        name :
+            str
+            图形存储路径
+        ifgird :
+            boolean
+    返回值：None
+    """
+    # 设定图片名称
+    path = name + '.png'
+    
+    # 将特征按照系数的绝对值的大小排序
+    feature = sorted(feature_dict, key=lambda f: abs(feature_dict[f]))
+    importance = [feature_dict[f] for f in feature]
+    index = range(len(feature_dict))
+    index_negative = [ i for i in index if importance[i]<=0 ]
+    importance_negative = [ importance[i] for i in index_negative ]
+    index_positive = [ i for i in index if importance[i]>0 ] 
+    importance_positive = [ importance[i] for i in index_positive ]
+    
+    # 绘出特征系数的柱状图，并保存图片
+    plt.figure(figsize=[plt.rcParams['figure.figsize'][0] * 1.5, \
+                        plt.rcParams['figure.figsize'][1]])
+    plt.axes([0.3, 0.1, 0.6, 0.8])
+    plt.gca().tick_params(labeltop='on')
+    plt.barh(index_negative, importance_negative, color='r')
+    plt.barh(index_positive, importance_positive, color='g')
+    plt.plot([0, 0], [0, len(feature_dict)], 'k')
+    plt.yticks([i + 0.4 for i in index], feature)
+    if ifgird:
+        plt.grid(axis='y')
+    plt.xlabel('Feature Coefficient')
+    plt.savefig(tmp_dir+path)
+    return path
+
 if __name__ == '__main__':
+    # manager.run()
     app.run(port='5001')

@@ -5,10 +5,7 @@ This aims at a tiny demo for demonstration but not for realease version
 """
 from flask import Flask, request, redirect, url_for, session, send_from_directory, jsonify
 import sys
-another_cch_path = '/Users/xiabofei/Documents/cchdir'
-sys.path.append(another_cch_path)
-import src as ix
-# import cch as ix
+import cch as ix
 from cch.envs import peek
 import pandas as pd
 import numpy as np
@@ -41,7 +38,7 @@ import hashlib
 import json
 import urllib2
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='./templates')
 app.config['SECRET_KEY'] = 'hard to guess string'
 app.config['UPLOADS'] = {'tmp':tmp_dir, 'fig':fig_dir}
 bootstrap = Bootstrap(app)
@@ -66,15 +63,16 @@ class ReadDFForm(Form):
     submit = SubmitField(u'提交')
 @app.route('/dc-dataset-register', methods=['GET','POST'])
 def dc_dataset_register():
+    st(context=27)
     paras = {}
     csv_form = ReadCSVForm()
     df_form = ReadDFForm()
-    paras['csv_form'] = csv_form 
-    paras['df_form'] = df_form 
+    paras['csv_form'] = csv_form
+    paras['df_form'] = df_form
     if request.method=='POST':
         if request.form['submit']=='csv':
-            paras['file_list'] = filter(None, csv_form.file_list.data.strip().split(';'))
-            paras['nrows_list'] = filter(None,csv_form.nrows_list.data.strip().split(';'))
+            paras['file_list'] = filter(None, request.form['file_list'].strip().split(';'))
+            paras['nrows_list'] = filter(None, request.form['nrows_list'].strip().split(';'))
             try:
                 # 保证长度与内容相等
                 assert len(paras['file_list'])==len(paras['nrows_list']), u'file_list与nrows_list长度不相等'
@@ -102,9 +100,9 @@ def dc_dataset_register():
         elif  request.form['submit']=='df':
             # df_l [(df名1, df1), (df名2, df2), ...]
             df_l = []
-            with pd.HDFStore(df_form.store_path.data.strip()) as store:
+            with pd.HDFStore(request.form['store_path'].strip()) as store:
                 for s_k in store.keys():
-                    if isinstance(store.get(s_k), pd.DataFrame): 
+                    if isinstance(store.get(s_k), pd.DataFrame):
                         if s_k.endswith(DATA_SUFF):
                             df_l.append( (extract_dataframe_name(s_k, HDF5_PREF, ''), store.get(s_k)) )
                         elif s_k.endswith(META_SUFF):
@@ -387,7 +385,6 @@ def trans_peek_to_2Dtable(df_peek, df_ori, df_name):
             store.put(df_name+META_SUFF, df_col_meta)
     except Exception,e:
         print e
-        st(context=21)
     return (col_names, df_col_meta)
 
 def get_colrange_by_coltype(df_data, col_name, dtype):
@@ -1054,4 +1051,5 @@ def dc_feature_engineering_one_to_one():
     except Exception,e:
         return render_template('dc_error.html', e_message=e)
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
+
